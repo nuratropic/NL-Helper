@@ -49,10 +49,10 @@ NL Helper — это мощный Tampermonkey UserScript, разработан�
    - [Chrome/Edge: Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobiwkp)
    - [Firefox: Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
 
-2. **Скачай и установи скрипт:**
-   - Нажми [сюда](https://github.com/nuratropic/nl-helper/raw/main/NL_Helper.js) чтобы установить скрипт
-   - Tampermonkey автоматически предложит установку
-   - Нажми "Установить"
+2. **Установите скрипт:**
+   - Перейдите на страницу скрипта: [NL Helper на Greasy Fork](https://greasyfork.org/en/scripts/582289-nl-helper)
+   - Нажмите кнопку **«Install this script».**
+   - Tampermonkey предложит подтвердить установку — нажмите **«Установить».**
 
 3. **Готово!** 🎉
    - Перейди на форум forum.blackrussia.online
