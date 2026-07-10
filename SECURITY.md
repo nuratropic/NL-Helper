@@ -40,15 +40,15 @@ We will respond within 48 hours and work on a fix privately.
 1. **Get SHA-256 hash of official script**:
    ```bash
    # On Linux/Mac
-   sha256sum NL_Helper.js
+   sha256sum nl_helper.js
    
    # On Windows (PowerShell)
-   Get-FileHash NL_Helper.js -Algorithm SHA256
+   Get-FileHash nl_helper.js -Algorithm SHA256
    ```
 
 2. **Compare with official hash** (published in releases):
    - Visit: https://github.com/nuratropic/nl-helper/releases
-   - Check the v5.0.0 release notes for the correct hash
+   - Check the v5.1.0 release notes for the correct hash
    - If hashes don't match, DO NOT USE THE SCRIPT
 
 3. **Domain Verification**:
@@ -63,10 +63,11 @@ We will respond within 48 hours and work on a fix privately.
 ### Domain Whitelisting ✅
 ```javascript
 // Script only runs on official forum domain
-if (!window.location.href.includes('forum.blackrussia.online')) {
-    throw new Error('Invalid domain');
+if (window.location.hostname !== 'forum.blackrussia.online') {
+    return;
 }
 ```
+This runs in addition to the `@match`/`@include` rules in the userscript header, so the script's logic never executes even if a userscript manager is configured to ignore those rules.
 
 ### No External Communications ✅
 - All data stored locally in browser
@@ -121,5 +122,5 @@ For general support: [Telegram @zhanzun23](https://t.me/zhanzun23) or [Forum](ht
 
 ---
 
-**Last Updated**: 2024
-**Maintained by**: Nicki_Lachowski & Claude
+**Last Updated**: July 2026
+**Maintained by**: Nicki_Lachowski
