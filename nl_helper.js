@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         NL Helper
 // @namespace    https://forum.blackrussia.online
-// @version      5.0.0
+// @version      6.2.0
 // @description  Профессиональный помощник куратора форума Black Russia
-// @author       Nicki_Lachowski & Claude
+// @author       Nicki_Lachowski
 // @match        https://forum.blackrussia.online/threads/*
 // @match        https://forum.blackrussia.online/threads/*/*
 // @match        http://forum.blackrussia.online/threads/*
@@ -12,7 +12,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @grant        GM_listValues
 // @grant        GM_registerMenuCommand
 // @license      MIT
 // @run-at       document-idle
@@ -22,11 +21,13 @@
 (function () {
     'use strict';
 
-    console.log('%c[NL Helper 5.0] ✅ Запущен: ' + window.location.href, 'color:#ff6b2b;font-size:14px;font-weight:bold');
+    if (window.location.hostname !== 'forum.blackrussia.online') {
+        return;
+    }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ХРАНИЛИЩЕ
-    // ═══════════════════════════════════════════════════════════════
+    console.log('%c[NL Helper 6.2] Запущен: ' + window.location.href, 'color:#ff6b2b;font-size:14px;font-weight:bold');
+
+    // ХРАНИЛИЩЕ
     const STORAGE = {
         TEMPLATES: 'nl_tpl_v5',
         SETTINGS:  'nl_set_v5',
@@ -40,9 +41,18 @@
     const MAX_CUSTOM      = 50;
     const MAX_HISTORY     = 30;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  СЕЛЕКТОРЫ
-    // ═══════════════════════════════════════════════════════════════
+    // одноразовый перенос данных из localStorage (версии до 5.0.1) в изолированное GM_* хранилище
+    (function migrateFromLocalStorage() {
+        Object.values(STORAGE).forEach(key => {
+            if (GM_getValue(key) !== undefined) return;
+            const old = localStorage.getItem(key);
+            if (old === null) return;
+            GM_setValue(key, old);
+            localStorage.removeItem(key);
+        });
+    })();
+
+    // СЕЛЕКТОРЫ
     const SEL = {
         editor:       '.fr-element.fr-view',
         blockMessage: '.blockMessage',
@@ -82,9 +92,7 @@
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ПРЕФИКСЫ
-    // ═══════════════════════════════════════════════════════════════
+    // ПРЕФИКСЫ
     const P = {
         NONE: 0, UNACCEPT: 4, ACCEPT: 8, PIN: 2,
         RESHENO: 6, CLOSE: 7, WATCHED: 9,
@@ -104,9 +112,7 @@
     };
     const OPEN_PFXS = new Set([P.PIN, P.GA, P.TEX, P.OJIDANIE]);
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ВКЛАДКИ
-    // ═══════════════════════════════════════════════════════════════
+    // ВКЛАДКИ
     const TABS = [
         { id: 'recent',  name: '🕐 Недавние'      },
         { id: 'players', name: '👤 Игроки'         },
@@ -119,9 +125,7 @@
         { id: 'custom',  name: '⭐ Мои'            },
     ];
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ТЕМЫ
-    // ═══════════════════════════════════════════════════════════════
+    // ТЕМЫ
     const THEMES = {
         amber:  { name:'🟠 NL Amber',   accent:'#f0900a', bg:'#0f0c07', bg2:'#161009', bg3:'#1e1710', border:'#30220a', text:'#f2e8d0', text2:'#7a6440', gradient:'linear-gradient(135deg,#f0900a,#c45f00)' },
         purple: { name:'🟣 NL Purple',  accent:'#a855f7', bg:'#0c0a12', bg2:'#120f1a', bg3:'#181426', border:'#28203a', text:'#ede8f8', text2:'#6e5f8a', gradient:'linear-gradient(135deg,#a855f7,#7c3aed)' },
@@ -129,11 +133,13 @@
         red:    { name:'🔴 NL Crimson', accent:'#ef4444', bg:'#0f0606', bg2:'#160909', bg3:'#1e0e0e', border:'#320f0f', text:'#f8e8e8', text2:'#7a4040', gradient:'linear-gradient(135deg,#ef4444,#b91c1c)' },
         green:  { name:'🟢 NL Matrix',  accent:'#22c55e', bg:'#050f08', bg2:'#08140b', bg3:'#0d1e10', border:'#0f3018', text:'#d0f0da', text2:'#3a7050', gradient:'linear-gradient(135deg,#22c55e,#15803d)' },
         white:  { name:'⚪ NL Arctic',  accent:'#e2e8f0', bg:'#06080c', bg2:'#0c0f14', bg3:'#12161e', border:'#20252e', text:'#f0f4ff', text2:'#606880', gradient:'linear-gradient(135deg,#e2e8f0,#94a3b8)' },
+        // Detroit: Become Human — dbh:true включает фирменный декор CyberLife (шрифты Michroma/Jost,
+        // LED-индикатор, скобки на карточках, пасхалки); btnText/overlay — переопределения для светлого фона
+        detroit:{ name:'🤖 NL CyberLife', accent:'#00a9cc', bg:'#eef2f5', bg2:'#ffffff', bg3:'#e1e9ee', border:'#c3d2db', text:'#132a36', text2:'#68818f', gradient:'linear-gradient(135deg,#29d5e8,#008fb3)', dbh:true, btnText:'#ffffff', overlay:'rgba(238,242,245,.94)' },
+        deviant:{ name:'🌃 NL Deviant',   accent:'#35d6ea', bg:'#06121c', bg2:'#0a1a26', bg3:'#102636', border:'#16374a', text:'#d9f2f8', text2:'#4e7a8c', gradient:'linear-gradient(135deg,#35d6ea,#0e7f9e)', dbh:true },
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    //  СТОП-СЛОВА
-    // ═══════════════════════════════════════════════════════════════
+    // СТОП-СЛОВА
     const DEFAULT_MG_TERMS = [
         'лвл','lvl','admin','админ','бан','ban','варн','warn',
         'деморган','нонрп','nonrp','dm','дб','db','зз','zz',
@@ -142,9 +148,7 @@
         'читер','cheat','hack','хак',
     ];
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ПЛЕЙСХОЛДЕРЫ
-    // ═══════════════════════════════════════════════════════════════
+    // ПЛЕЙСХОЛДЕРЫ
     const PH_HELP = [
         ['{nickname}',  'Ник игрока из темы'],
         ['{mention}',   'Упоминание [USER=id]ник[/USER]'],
@@ -155,9 +159,7 @@
         ['{thread_id}', 'Номер темы'],
     ];
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ШАБЛОНЫ ПО УМОЛЧАНИЮ
-    // ═══════════════════════════════════════════════════════════════
+    // ШАБЛОНЫ ПО УМОЛЧАНИЮ
     const DEFAULT_TEMPLATES = {
         players: [
             { id:'p1', title:'На рассмотрении', prefix:P.PIN, tags:'рассмотрение, жалоба', isPinned:true, isNew:false, uses:0,
@@ -178,294 +180,6 @@
               content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]?.??.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Описание пункта правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Наказание[/I][/SIZE][/COLOR][/SPOILER]' },
             { id:'p9', title:'Отказано — пункт правил', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'отказано, пункт, правила', isRaw:true,
               content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]?.??.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Описание пункта правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Наказание[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p10_a', title:'Одобрено — 2.01', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'RP, роль, 2.01, нарушение RP, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.01.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено поведение, нарушающее нормы Role Play процессов[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p11_d', title:'Отказано — 2.01', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'RP, роль, 2.01, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.01.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено поведение, нарушающее нормы Role Play процессов[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p12_a', title:'Одобрено — AFK 2.02', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'AFK, 2.02, отсутствие, процесс, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.02.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено целенаправленно уходить от Role Play процесса[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p13_d', title:'Отказано — AFK 2.02', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'AFK, 2.02, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.02.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено целенаправленно уходить от Role Play процесса[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p14_a', title:'Одобрено — 2.03', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'NonRP, езда, 2.03, транспорт, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён NonRP Drive — вождение транспорта в невозможных условиях[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p15_d', title:'Отказано — 2.03', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'NonRP, езда, 2.03, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён NonRP Drive — вождение транспорта в невозможных условиях[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p16_a', title:'Одобрено — 2.04', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'помеха, 2.04, процесс, наказание, ban', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены действия, создающие помехи в игровом процессе или выполнении работ[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 10 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p17_d', title:'Отказано — 2.04', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'помеха, 2.04, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены действия, создающие помехи в игровом процессе или выполнении работ[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 10 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p18_a', title:'Одобрено — 2.05', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'обман, OOC, IC, 2.05, наказание, ban', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены любые OOC-обманы и IC-обманы с нарушением RP правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p19_d', title:'Отказано — 2.05', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'обман, OOC, IC, 2.05, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены любые OOC-обманы и IC-обманы с нарушением RP правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p20_a', title:'Одобрено — 2.06', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.07.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено нахождение в AFK без ESC, создающее помеху игрокам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Kick[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p21_d', title:'Отказано — 2.06', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.07.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено нахождение в AFK без ESC, создающее помеху игрокам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Kick[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p22_a', title:'Одобрено — 2.08', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'мораль, 2.08, сек, вар, наказание', tags:'мораль, 2.08, секс, варн, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена любая форма аморальных действий сексуального характера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p23_d', title:'Отказано — 2.08', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'мораль, 2.08, отказано', tags:'мораль, 2.08, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена любая форма аморальных действий сексуального характера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p24_a', title:'Одобрено — 2.09', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'слив, 2.09, склад, наказание, ban', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.09.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено сливать склад фракции / семьи[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p25_d', title:'Отказано — 2.09', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'слив, 2.09, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.09.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено сливать склад фракции / семьи[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p26_a', title:'Одобрено — 2.10', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'/do, 2.10, обман, команда, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено обманывать в /do[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p27_d', title:'Отказано — 2.10', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'/do, 2.10, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено обманывать в /do[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p28_a', title:'Одобрено — 2.11', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'работа, 2.11, транспорт, наказание', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование рабочего или фракционного транспорта в личных целях[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p29_d', title:'Отказано — 2.11', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'работа, 2.11, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование рабочего или фракционного транспорта в личных целях[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p30_a', title:'Одобрено — 2.12', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, tags:'медиа, 2.12, помеха, наказание, ban', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.12.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена помеха в работе официальных медиалиц проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p31_d', title:'Отказано — 2.12', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, tags:'медиа, 2.12, отказано', isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.12.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена помеха в работе официальных медиалиц проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p32_a', title:'Одобрено — DB (DriveBy)', tags:'DB, 2.13, driveby, убийство, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.13.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен DB (DriveBy) — убийство/урон без IC причины с транспорта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p33_d', title:'Отказано — DB (DriveBy)', tags:'DB, 2.13, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.13.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен DB (DriveBy) — убийство/урон без IC причины с транспорта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p34_a', title:'Одобрено — TK (Team Kill)', tags:'TK, 2.15, teamkill, фракция, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.15.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен TK (Team Kill) — убийство члена своей/союзной фракции без IC причины[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p35_d', title:'Отказано — TK (Team Kill)', tags:'TK, 2.15, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.15.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен TK (Team Kill) — убийство члена своей/союзной фракции без IC причины[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p36_a', title:'Одобрено — SK (Spawn Kill)', tags:'SK, 2.16, spawnkill, спавн, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.16.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен SK (Spawn Kill) — убийство/урон на титульной территории или у интерьеров[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p37_d', title:'Отказано — SK (Spawn Kill)', tags:'SK, 2.16, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.16.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен SK (Spawn Kill) — убийство/урон на титульной территории или у интерьеров[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут / Warn[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p38_a', title:'Одобрено — MG (MetaGaming)', tags:'MG, 2.18, metagaming, ooc, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.18.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён MG (MetaGaming) — использование OOC-информации в IC-процессе[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p39_d', title:'Отказано — MG (MetaGaming)', tags:'MG, 2.18, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.18.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён MG (MetaGaming) — использование OOC-информации в IC-процессе[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p40_a', title:'Одобрено — DM (DeathMatch)', tags:'DM, 2.19, deathmatch, убийство, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.19.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён DM (DeathMatch) — убийство/нанесение урона без IC-причины[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 90 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p41_d', title:'Отказано — DM (DeathMatch)', tags:'DM, 2.19, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.19.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещён DM (DeathMatch) — убийство/нанесение урона без IC-причины[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 90 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p42_a', title:'Одобрено — 2.20', tags:'massdm, 2.20, множественное убийство, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.20.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен Mass DM — убийство/урон без IC причины трём и более игрокам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 3–7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p43_d', title:'Отказано — 2.20', tags:'massdm, 2.20, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.20.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен Mass DM — убийство/урон без IC причины трём и более игрокам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 3–7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p44_a', title:'Одобрено — 2.21', tags:'баги, 2.21, система, эксплуатация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.21.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено обходить игровую систему или использовать баги сервера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p45_d', title:'Отказано — 2.21', tags:'баги, 2.21, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.21.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено обходить игровую систему или использовать баги сервера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p46_a', title:'Одобрено — 2.22', tags:'читы, 2.22, программы, макросы, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.22.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено хранить/использовать стороннее ПО или читы, включая макросы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p47_d', title:'Отказано — 2.22', tags:'читы, 2.22, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.22.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено хранить/использовать стороннее ПО или читы, включая макросы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p48_a', title:'Одобрено — 2.23', tags:'ошибки, 2.23, администрация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.23.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено скрывать ошибки игровых систем от администрации[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p49_d', title:'Отказано — 2.23', tags:'ошибки, 2.23, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.23.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено скрывать ошибки игровых систем от администрации[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p50_a', title:'Одобрено — 2.24', tags:'скрывание, 2.24, администрация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.24.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено скрывать от администрации нарушителей или злоумышленников[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p51_d', title:'Отказано — 2.24', tags:'скрывание, 2.24, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.24.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено скрывать от администрации нарушителей или злоумышленников[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p52_a', title:'Одобрено — 2.25', tags:'репутация, 2.25, проект, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.25.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены попытки навредить репутации проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p53_d', title:'Отказано — 2.25', tags:'репутация, 2.25, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.25.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены попытки навредить репутации проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p54_a', title:'Одобрено — 2.26', tags:'ресурсы, 2.26, проект, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.26.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено намеренно наносить вред ресурсам проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p55_d', title:'Отказано — 2.26', tags:'ресурсы, 2.26, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.26.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено намеренно наносить вред ресурсам проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p56_a', title:'Одобрено — 2.27', tags:'информация, 2.27, администрация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.27.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено распространять внутреннюю информацию администрации проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p57_d', title:'Отказано — 2.27', tags:'информация, 2.27, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.27.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено распространять внутреннюю информацию администрации проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p58_a', title:'Одобрено — 2.28', tags:'валюта, 2.28, деньги, реальные, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.28.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена покупка/продажа внутриигровой валюты за реальные деньги[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + обнуление аккаунта + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p59_d', title:'Отказано — 2.28', tags:'валюта, 2.28, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.28.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена покупка/продажа внутриигровой валюты за реальные деньги[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan + обнуление аккаунта + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p60_a', title:'Одобрено — 2.30', tags:'экономика, 2.30, сервер, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.30.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено пытаться нанести ущерб экономике сервера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p61_d', title:'Отказано — 2.30', tags:'экономика, 2.30, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.30.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено пытаться нанести ущерб экономике сервера[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p62_a', title:'Одобрено — 2.31', tags:'реклама, 2.31, проект, сторонние, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.31.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено рекламировать на серверах сторонние проекты, каналы и ресурсы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p63_d', title:'Отказано — 2.31', tags:'реклама, 2.31, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.31.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено рекламировать на серверах сторонние проекты, каналы и ресурсы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p64_a', title:'Одобрено — 2.32', tags:'обман, 2.32, администрация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.32.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено введение в заблуждение / обман администрации на всех ресурсах[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p65_d', title:'Отказано — 2.32', tags:'обман, 2.32, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.32.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено введение в заблуждение / обман администрации на всех ресурсах[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p66_a', title:'Одобрено — 2.33', tags:'уязвимость, 2.33, правила, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.33.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено пользоваться уязвимостью правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p67_d', title:'Отказано — 2.33', tags:'уязвимость, 2.33, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.33.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено пользоваться уязвимостью правил[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p68_a', title:'Одобрено — 2.37', tags:'угрозы, 2.37, ooc, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.37.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены OOC-угрозы, в том числе завуалированные[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 120 минут / Ban 7–15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p69_d', title:'Отказано — 2.37', tags:'угрозы, 2.37, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.37.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены OOC-угрозы, в том числе завуалированные[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 120 минут / Ban 7–15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p70_a', title:'Одобрено — 2.38', tags:'информация, 2.38, личные данные, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.38.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено распространять личную информацию игроков[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p71_d', title:'Отказано — 2.38', tags:'информация, 2.38, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.38.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено распространять личную информацию игроков[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan + ЧС проекта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p72_a', title:'Одобрено — 2.39', tags:'злоупотребление, 2.39, нарушения, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.39.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Злоупотребление нарушениями правил сервера (6+ нарушений за 7 дней)[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p73_d', title:'Отказано — 2.39', tags:'злоупотребление, 2.39, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.39.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Злоупотребление нарушениями правил сервера (6+ нарушений за 7 дней)[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p74_a', title:'Одобрено — 2.40', tags:'деструктив, 2.40, проект, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.40.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены деструктивные действия по отношению к проекту[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 300 минут / Ban 30 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p75_d', title:'Отказано — 2.40', tags:'деструктив, 2.40, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.40.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены деструктивные действия по отношению к проекту[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 300 минут / Ban 30 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p76_a', title:'Одобрено — 2.42', tags:'продажа, 2.42, аккаунт, имущество, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.42.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Попытка продажи игрового имущества или аккаунта за реальные деньги[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p77_d', title:'Отказано — 2.42', tags:'продажа, 2.42, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.42.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Попытка продажи игрового имущества или аккаунта за реальные деньги[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p78_a', title:'Одобрено — 2.43', tags:'промокод, 2.43, код, обмен, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.43.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена продажа/обмен бонус-кодов и промокодов проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 120 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p79_d', title:'Отказано — 2.43', tags:'промокод, 2.43, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.43.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена продажа/обмен бонус-кодов и промокодов проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 120 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p80_a', title:'Одобрено — 2.47', tags:'поля, 2.47, транспорт, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.47.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено передвижение по полям на рабочем грузовом транспорте[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p81_d', title:'Отказано — 2.47', tags:'поля, 2.47, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.47.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено передвижение по полям на рабочем грузовом транспорте[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p82_a', title:'Одобрено — 2.48', tags:'репутация, 2.48, семья, лидер, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.48.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена продажа/передача репутации семьи; сокрытие нарушителей лидером[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление рейтинга / обнуление аккаунта лидера[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p83_d', title:'Отказано — 2.48', tags:'репутация, 2.48, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.48.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена продажа/передача репутации семьи; сокрытие нарушителей лидером[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление рейтинга / обнуление аккаунта лидера[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p84_a', title:'Одобрено — 2.50', tags:'задержание, 2.50, аукцион, казино, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.50.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены задержания и аресты в интерьере аукциона, казино, во время мероприятий[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 10 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p85_d', title:'Отказано — 2.50', tags:'задержание, 2.50, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.50.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены задержания и аресты в интерьере аукциона, казино, во время мероприятий[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 10 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p86_a', title:'Одобрено — 2.52', tags:'аксессуары, 2.52, неадекватное использование, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.52.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено неадекватное использование аксессуаров[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление аксессуаров / Jail 30 минут при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p87_d', title:'Отказано — 2.52', tags:'аксессуары, 2.52, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.52.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено неадекватное использование аксессуаров[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление аксессуаров / Jail 30 минут при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p88_a', title:'Одобрено — 2.53', tags:'имена, 2.53, нецензурные, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.53.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование нецензурных/оскорбительных названий для игровых ценностей[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Принудительная смена / Ban 1 день / Обнуление при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p89_d', title:'Отказано — 2.53', tags:'имена, 2.53, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.53.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование нецензурных/оскорбительных названий для игровых ценностей[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Принудительная смена / Ban 1 день / Обнуление при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p90_a', title:'Одобрено — 2.54', tags:'неуважение, 2.54, администрация, наказание', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.54.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено неуважительное обращение и оскорбление администрации[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 180 / 300 минут при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p91_d', title:'Отказано — 2.54', tags:'неуважение, 2.54, отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.54.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено неуважительное обращение и оскорбление администрации[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 180 / 300 минут при повторном[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p92_a', title:'Одобрено — 2.55', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.55.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещается багоюз, связанный с анимацией[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 120 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p93_d', title:'Отказано — 2.55', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.55.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещается багоюз, связанный с анимацией[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Jail 120 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p94_a', title:'Одобрено — 2.57', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.57.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещается брать в долг игровые ценности и не возвращать их[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p95_d', title:'Отказано — 2.57', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]2.57.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещается брать в долг игровые ценности и не возвращать их[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p96_a', title:'Одобрено — 3.02', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.02.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование Caps Lock в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p97_d', title:'Отказано — 3.02', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.02.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование Caps Lock в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p98_a', title:'Одобрено — 3.03', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены оскорбления, расизм, дискриминация в OOC чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p99_d', title:'Отказано — 3.03', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены оскорбления, расизм, дискриминация в OOC чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p100_a', title:'Одобрено — 3.04', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено оскорбление или упоминание родных в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 300 минут / Ban 7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p101_d', title:'Отказано — 3.04', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено оскорбление или упоминание родных в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 300 минут / Ban 7 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p102_a', title:'Одобрено — 3.05', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен флуд — 3 и более повторяющихся сообщений[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p103_d', title:'Отказано — 3.05', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещен флуд — 3 и более повторяющихся сообщений[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p104_a', title:'Одобрено — 3.06', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.06.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено злоупотребление знаками препинания и символами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p105_d', title:'Отказано — 3.06', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.06.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено злоупотребление знаками препинания и символами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p106_a', title:'Одобрено — 3.08', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены любые формы «слива» через глобальные чаты[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p107_d', title:'Отказано — 3.08', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены любые формы «слива» через глобальные чаты[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p108_a', title:'Одобрено — 3.10', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено выдавать себя за администратора[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней + ЧС сервера[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p109_d', title:'Отказано — 3.10', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено выдавать себя за администратора[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 7–15 дней + ЧС сервера[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p110_a', title:'Одобрено — 3.11', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено вводить игроков в заблуждение путём злоупотребления командами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p111_d', title:'Отказано — 3.11', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено вводить игроков в заблуждение путём злоупотребления командами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15–30 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p112_a', title:'Одобрено — 3.12', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.12.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено подавать репорт транслитом, с Caps Lock или нецензурной бранью[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Report Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p113_d', title:'Отказано — 3.12', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.12.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено подавать репорт транслитом, с Caps Lock или нецензурной бранью[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Report Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p114_a', title:'Одобрено — 3.14', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.14.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено включать музыку в Voice Chat[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p115_d', title:'Отказано — 3.14', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.14.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено включать музыку в Voice Chat[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p116_a', title:'Одобрено — 3.16', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.16.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать посторонние шумы или звуки[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное предупреждение / Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p117_d', title:'Отказано — 3.16', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.16.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать посторонние шумы или звуки[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное предупреждение / Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p118_a', title:'Одобрено — 3.18', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.18.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены споры и обсуждения на политические, религиозные, расовые темы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 180 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p119_d', title:'Отказано — 3.18', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.18.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещены споры и обсуждения на политические, религиозные, расовые темы[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 180 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p120_a', title:'Одобрено — 3.19', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.19.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование сторонних программ для изменения голоса[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p121_d', title:'Отказано — 3.19', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.19.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование сторонних программ для изменения голоса[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 60 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p122_a', title:'Одобрено — 3.20', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.20.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование транслита в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p123_d', title:'Отказано — 3.20', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.20.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование транслита в любом чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p124_a', title:'Одобрено — 3.21', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.21.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена реклама промокодов в игре[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p125_d', title:'Отказано — 3.21', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.21.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена реклама промокодов в игре[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Ban 15 дней[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p126_a', title:'Одобрено — 3.22', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.22.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено публиковать объявления в помещениях государственных организаций[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p127_d', title:'Отказано — 3.22', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.22.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено публиковать объявления в помещениях государственных организаций[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p128_a', title:'Одобрено — 3.23', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.23.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование нецензурных слов в VIP чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p129_d', title:'Отказано — 3.23', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.23.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использование нецензурных слов в VIP чате[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p130_a', title:'Одобрено — 3.24', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.24.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено токсичное поведение в IC чате, унижающее честь и достоинство[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное предупреждение / Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p131_d', title:'Отказано — 3.24', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]3.24.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено токсичное поведение в IC чате, унижающее честь и достоинство[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное предупреждение / Mute 30 минут[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p132_a', title:'Одобрено — 4.03', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена передача игрового аккаунта третьим лицам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p133_d', title:'Отказано — 4.03', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.03.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена передача игрового аккаунта третьим лицам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p134_a', title:'Одобрено — 4.04', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено регистрировать более трёх игровых аккаунтов на сервере[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p135_d', title:'Отказано — 4.04', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.04.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено регистрировать более трёх игровых аккаунтов на сервере[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p136_a', title:'Одобрено — 4.05', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена передача или трансфер игровых ценностей между аккаунтами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 15 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p137_d', title:'Отказано — 4.05', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.05.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещена передача или трансфер игровых ценностей между аккаунтами[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Warn / Ban 15 дней / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p138_a', title:'Одобрено — 4.06', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.06.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Никнейм должен быть в формате «Имя_Фамилия» на английском языке[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p139_d', title:'Отказано — 4.06', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.06.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Никнейм должен быть в формате «Имя_Фамилия» на английском языке[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p140_a', title:'Одобрено — 4.07', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.07.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать более двух заглавных букв в никнейме[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p141_d', title:'Отказано — 4.07', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.07.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать более двух заглавных букв в никнейме[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p142_a', title:'Одобрено — 4.08', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать никнейм, не соответствующий реальным именам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p143_d', title:'Отказано — 4.08', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.08.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать никнейм, не соответствующий реальным именам[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p144_a', title:'Одобрено — 4.09', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.09.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать никнейм с матерными словами или оскорблениями[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p145_d', title:'Отказано — 4.09', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.09.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено использовать никнейм с матерными словами или оскорблениями[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p146_a', title:'Одобрено — 4.10', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать никнейм, похожий на никнеймы других игроков или администраторов[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p147_d', title:'Отказано — 4.10', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.10.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать никнейм, похожий на никнеймы других игроков или администраторов[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Устное замечание + смена никнейма / PermBan[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p148_a', title:'Одобрено — 4.11', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Владеть бизнесами разрешается только с одного основного аккаунта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление твинк аккаунта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p149_d', title:'Отказано — 4.11', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.11.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Владеть бизнесами разрешается только с одного основного аккаунта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление твинк аккаунта[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p150_a', title:'Одобрено — 4.14', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.14.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено иметь транспортную/строительную компанию без активности в игре[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление компании без компенсации[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p151_d', title:'Отказано — 4.14', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.14.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено иметь транспортную/строительную компанию без активности в игре[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | Обнуление компании без компенсации[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p152_a', title:'Одобрено — 4.15', prefix:P.ACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#61bd6d][I]Одобрено[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nИгрок понесёт наказание по следующему пункту общих правил серверов;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.15.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать промокод, идентичный промокоду блогера проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan / Обнуление имущества[/I][/SIZE][/COLOR][/SPOILER]' },
-            { id:'p153_d', title:'Отказано — 4.15', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true,
-              content:'[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=#ff4757][I]Отказано[/I][/COLOR][COLOR=rgb(255,255,255)][I].\nНарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;[/I][/COLOR][/SIZE]\n[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]4.15.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]Запрещено создавать промокод, идентичный промокоду блогера проекта[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | PermBan / Обнуление имущества[/I][/SIZE][/COLOR][/SPOILER]' },
         ],
         admins: [
             { id:'a1', title:'На рассмотрении', prefix:P.PIN, isPinned:true, isNew:false, uses:0,
@@ -540,70 +254,195 @@
         custom: [],
     };
 
-    // ═══════════════════════════════════════════════════════════════
-// ПОЛНАЯ АВТОМАТИЧЕСКАЯ ОПТИМИЗАЦИЯ НАЗВАНИЙ И ТЕГОВ (РАЗДЕЛ ИГРОКИ)
-// ═══════════════════════════════════════════════════════════════
-(function() {
-    // Полная карта коротких названий и расширенных поисковых тегов для Black Russia
+    const RULES = {
+        '2.01': { a:'p10_a', d:'p11_d', desc:'Запрещено поведение, нарушающее нормы Role Play процессов', penalty:'Jail 30 минут' },
+        '2.02': { a:'p12_a', d:'p13_d', desc:'Запрещено целенаправленно уходить от Role Play процесса', penalty:'Jail 30 минут / Warn' },
+        '2.03': { a:'p14_a', d:'p15_d', desc:'Запрещён NonRP Drive — вождение транспорта в невозможных условиях', penalty:'Jail 30 минут' },
+        '2.04': { a:'p16_a', d:'p17_d', desc:'Запрещены действия, создающие помехи в игровом процессе или выполнении работ', penalty:'Ban 10 дней' },
+        '2.05': { a:'p18_a', d:'p19_d', desc:'Запрещены любые OOC-обманы и IC-обманы с нарушением RP правил', penalty:'15–30 дней / PermBan' },
+        '2.07': { a:'p20_a', d:'p21_d', desc:'Запрещено нахождение в AFK без ESC, создающее помеху игрокам', penalty:'Kick' },
+        '2.08': { a:'p22_a', d:'p23_d', desc:'Запрещена любая форма аморальных действий сексуального характера', penalty:'Jail 30 минут / Warn' },
+        '2.09': { a:'p24_a', d:'p25_d', desc:'Запрещено сливать склад фракции / семьи', penalty:'Ban 15–30 дней / PermBan' },
+        '2.10': { a:'p26_a', d:'p27_d', desc:'Запрещено обманывать в /do', penalty:'Jail 30 минут / Warn' },
+        '2.11': { a:'p28_a', d:'p29_d', desc:'Запрещено использование рабочего или фракционного транспорта в личных целях', penalty:'Jail 30 минут' },
+        '2.12': { a:'p30_a', d:'p31_d', desc:'Запрещена помеха в работе официальных медиалиц проекта', penalty:'Ban 7 дней' },
+        '2.13': { a:'p32_a', d:'p33_d', desc:'Запрещен DB (DriveBy) — убийство/урон без IC причины с транспорта', penalty:'Jail 60 минут' },
+        '2.15': { a:'p34_a', d:'p35_d', desc:'Запрещен TK (Team Kill) — убийство члена своей/союзной фракции без IC причины', penalty:'Jail 60 минут / Warn' },
+        '2.16': { a:'p36_a', d:'p37_d', desc:'Запрещен SK (Spawn Kill) — убийство/урон на титульной территории или у интерьеров', penalty:'Jail 60 минут / Warn' },
+        '2.18': { a:'p38_a', d:'p39_d', desc:'Запрещён MG (MetaGaming) — использование OOC-информации в IC-процессе', penalty:'Mute 30 минут' },
+        '2.19': { a:'p40_a', d:'p41_d', desc:'Запрещён DM (DeathMatch) — убийство/нанесение урона без IC-причины', penalty:'Jail 90 минут' },
+        '2.20': { a:'p42_a', d:'p43_d', desc:'Запрещен Mass DM — убийство/урон без IC причины трём и более игрокам', penalty:'Warn / Ban 3–7 дней' },
+        '2.21': { a:'p44_a', d:'p45_d', desc:'Запрещено обходить игровую систему или использовать баги сервера', penalty:'Warn / Ban 15–30 дней / PermBan' },
+        '2.22': { a:'p46_a', d:'p47_d', desc:'Запрещено хранить/использовать стороннее ПО или читы, включая макросы', penalty:'Ban 15–30 дней / PermBan' },
+        '2.23': { a:'p48_a', d:'p49_d', desc:'Запрещено скрывать ошибки игровых систем от администрации', penalty:'Ban 15–30 дней / PermBan' },
+        '2.24': { a:'p50_a', d:'p51_d', desc:'Запрещено скрывать от администрации нарушителей или злоумышленников', penalty:'Ban 15–30 дней / PermBan + ЧС проекта' },
+        '2.25': { a:'p52_a', d:'p53_d', desc:'Запрещены попытки навредить репутации проекта', penalty:'PermBan + ЧС проекта' },
+        '2.26': { a:'p54_a', d:'p55_d', desc:'Запрещено намеренно наносить вред ресурсам проекта', penalty:'PermBan + ЧС проекта' },
+        '2.27': { a:'p56_a', d:'p57_d', desc:'Запрещено распространять внутреннюю информацию администрации проекта', penalty:'PermBan + ЧС проекта' },
+        '2.28': { a:'p58_a', d:'p59_d', desc:'Запрещена покупка/продажа внутриигровой валюты за реальные деньги', penalty:'PermBan + обнуление аккаунта + ЧС проекта' },
+        '2.30': { a:'p60_a', d:'p61_d', desc:'Запрещено пытаться нанести ущерб экономике сервера', penalty:'Ban 15–30 дней / PermBan' },
+        '2.31': { a:'p62_a', d:'p63_d', desc:'Запрещено рекламировать на серверах сторонние проекты, каналы и ресурсы', penalty:'Ban 7 дней / PermBan' },
+        '2.32': { a:'p64_a', d:'p65_d', desc:'Запрещено введение в заблуждение / обман администрации на всех ресурсах', penalty:'Ban 7–15 дней / PermBan' },
+        '2.33': { a:'p66_a', d:'p67_d', desc:'Запрещено пользоваться уязвимостью правил', penalty:'Ban 15–30 дней / PermBan' },
+        '2.37': { a:'p68_a', d:'p69_d', desc:'Запрещены OOC-угрозы, в том числе завуалированные', penalty:'Mute 120 минут / Ban 7–15 дней' },
+        '2.38': { a:'p70_a', d:'p71_d', desc:'Запрещено распространять личную информацию игроков', penalty:'Ban 15–30 дней / PermBan + ЧС проекта' },
+        '2.39': { a:'p72_a', d:'p73_d', desc:'Злоупотребление нарушениями правил сервера (6+ нарушений за 7 дней)', penalty:'Ban 7–15 дней' },
+        '2.40': { a:'p74_a', d:'p75_d', desc:'Запрещены деструктивные действия по отношению к проекту', penalty:'Mute 300 минут / Ban 30 дней' },
+        '2.42': { a:'p76_a', d:'p77_d', desc:'Попытка продажи игрового имущества или аккаунта за реальные деньги', penalty:'PermBan' },
+        '2.43': { a:'p78_a', d:'p79_d', desc:'Запрещена продажа/обмен бонус-кодов и промокодов проекта', penalty:'Mute 120 минут' },
+        '2.47': { a:'p80_a', d:'p81_d', desc:'Запрещено передвижение по полям на рабочем грузовом транспорте', penalty:'Jail 60 минут' },
+        '2.48': { a:'p82_a', d:'p83_d', desc:'Запрещена продажа/передача репутации семьи; сокрытие нарушителей лидером', penalty:'Обнуление рейтинга / обнуление аккаунта лидера' },
+        '2.50': { a:'p84_a', d:'p85_d', desc:'Запрещены задержания и аресты в интерьере аукциона, казино, во время мероприятий', penalty:'Warn / Ban 10 дней' },
+        '2.52': { a:'p86_a', d:'p87_d', desc:'Запрещено неадекватное использование аксессуаров', penalty:'Обнуление аксессуаров / Jail 30 минут при повторном' },
+        '2.53': { a:'p88_a', d:'p89_d', desc:'Запрещено использование нецензурных/оскорбительных названий для игровых ценностей', penalty:'Принудительная смена / Ban 1 день / Обнуление при повторном' },
+        '2.54': { a:'p90_a', d:'p91_d', desc:'Запрещено неуважительное обращение и оскорбление администрации', penalty:'Mute 180 / 300 минут при повторном' },
+        '2.55': { a:'p92_a', d:'p93_d', desc:'Запрещается багоюз, связанный с анимацией', penalty:'Jail 120 минут' },
+        '2.57': { a:'p94_a', d:'p95_d', desc:'Запрещается брать в долг игровые ценности и не возвращать их', penalty:'Ban 30 дней / PermBan' },
+        '3.02': { a:'p96_a', d:'p97_d', desc:'Запрещено использование Caps Lock в любом чате', penalty:'Mute 30 минут' },
+        '3.03': { a:'p98_a', d:'p99_d', desc:'Запрещены оскорбления, расизм, дискриминация в OOC чате', penalty:'Mute 30 минут' },
+        '3.04': { a:'p100_a', d:'p101_d', desc:'Запрещено оскорбление или упоминание родных в любом чате', penalty:'Mute 300 минут / Ban 7 дней' },
+        '3.05': { a:'p102_a', d:'p103_d', desc:'Запрещен флуд — 3 и более повторяющихся сообщений', penalty:'Mute 30 минут' },
+        '3.06': { a:'p104_a', d:'p105_d', desc:'Запрещено злоупотребление знаками препинания и символами', penalty:'Mute 30 минут' },
+        '3.08': { a:'p106_a', d:'p107_d', desc:'Запрещены любые формы «слива» через глобальные чаты', penalty:'PermBan' },
+        '3.10': { a:'p108_a', d:'p109_d', desc:'Запрещено выдавать себя за администратора', penalty:'Ban 7–15 дней + ЧС сервера' },
+        '3.11': { a:'p110_a', d:'p111_d', desc:'Запрещено вводить игроков в заблуждение путём злоупотребления командами', penalty:'Ban 15–30 дней / PermBan' },
+        '3.12': { a:'p112_a', d:'p113_d', desc:'Запрещено подавать репорт транслитом, с Caps Lock или нецензурной бранью', penalty:'Report Mute 30 минут' },
+        '3.14': { a:'p114_a', d:'p115_d', desc:'Запрещено включать музыку в Voice Chat', penalty:'Mute 60 минут' },
+        '3.16': { a:'p116_a', d:'p117_d', desc:'Запрещено создавать посторонние шумы или звуки', penalty:'Устное предупреждение / Mute 30 минут' },
+        '3.18': { a:'p118_a', d:'p119_d', desc:'Запрещены споры и обсуждения на политические, религиозные, расовые темы', penalty:'Mute 180 минут' },
+        '3.19': { a:'p120_a', d:'p121_d', desc:'Запрещено использование сторонних программ для изменения голоса', penalty:'Mute 60 минут' },
+        '3.20': { a:'p122_a', d:'p123_d', desc:'Запрещено использование транслита в любом чате', penalty:'Mute 30 минут' },
+        '3.21': { a:'p124_a', d:'p125_d', desc:'Запрещена реклама промокодов в игре', penalty:'Ban 15 дней' },
+        '3.22': { a:'p126_a', d:'p127_d', desc:'Запрещено публиковать объявления в помещениях государственных организаций', penalty:'Mute 30 минут' },
+        '3.23': { a:'p128_a', d:'p129_d', desc:'Запрещено использование нецензурных слов в VIP чате', penalty:'Mute 30 минут' },
+        '3.24': { a:'p130_a', d:'p131_d', desc:'Запрещено токсичное поведение в IC чате, унижающее честь и достоинство', penalty:'Устное предупреждение / Mute 30 минут' },
+        '4.03': { a:'p132_a', d:'p133_d', desc:'Запрещена передача игрового аккаунта третьим лицам', penalty:'PermBan' },
+        '4.04': { a:'p134_a', d:'p135_d', desc:'Запрещено регистрировать более трёх игровых аккаунтов на сервере', penalty:'PermBan' },
+        '4.05': { a:'p136_a', d:'p137_d', desc:'Запрещена передача или трансфер игровых ценностей между аккаунтами', penalty:'Warn / Ban 15 дней / PermBan' },
+        '4.06': { a:'p138_a', d:'p139_d', desc:'Никнейм должен быть в формате «Имя_Фамилия» на английском языке', penalty:'Устное замечание + смена никнейма' },
+        '4.07': { a:'p140_a', d:'p141_d', desc:'Запрещено использовать более двух заглавных букв в никнейме', penalty:'Устное замечание + смена никнейма' },
+        '4.08': { a:'p142_a', d:'p143_d', desc:'Запрещено использовать никнейм, не соответствующий реальным именам', penalty:'Устное замечание + смена никнейма' },
+        '4.09': { a:'p144_a', d:'p145_d', desc:'Запрещено использовать никнейм с матерными словами или оскорблениями', penalty:'Устное замечание + смена никнейма / PermBan' },
+        '4.10': { a:'p146_a', d:'p147_d', desc:'Запрещено создавать никнейм, похожий на никнеймы других игроков или администраторов', penalty:'Устное замечание + смена никнейма / PermBan' },
+        '4.11': { a:'p148_a', d:'p149_d', desc:'Владеть бизнесами разрешается только с одного основного аккаунта', penalty:'Обнуление твинк аккаунта' },
+        '4.14': { a:'p150_a', d:'p151_d', desc:'Запрещено иметь транспортную/строительную компанию без активности в игре', penalty:'Обнуление компании без компенсации' },
+        '4.15': { a:'p152_a', d:'p153_d', desc:'Запрещено создавать промокод, идентичный промокоду блогера проекта', penalty:'PermBan / Обнуление имущества' },
+    };
+    function ruleSpoiler(rule) {
+        const { desc, penalty } = RULES[rule];
+        return `[SPOILER="Посмотреть пункт правил"][COLOR=rgb(209,72,65)][SIZE=6][I]${rule}.[/I][/SIZE][/COLOR][SIZE=6][I] [COLOR=rgb(209,213,216)]${desc}[/COLOR][/I][/SIZE][COLOR=rgb(209,72,65)][SIZE=6][I] | ${penalty}[/I][/SIZE][/COLOR][/SPOILER]`;
+    }
+    function ruleBody(approved, rule) {
+        const color = approved ? '#61bd6d' : '#ff4757';
+        const word  = approved ? 'Одобрено' : 'Отказано';
+        const lead  = approved
+            ? 'Игрок понесёт наказание по следующему пункту общих правил серверов;'
+            : 'Нарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;';
+        return `[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=${color}][I]${word}[/I][/COLOR][COLOR=rgb(255,255,255)][I].\n${lead}[/I][/COLOR][/SIZE]\n${ruleSpoiler(rule)}`;
+    }
+    // как ruleBody, но с несколькими пунктами правил в одном посте
+    function combinedRuleBody(approved, rules) {
+        const many  = rules.length > 1;
+        const color = approved ? '#61bd6d' : '#ff4757';
+        const word  = approved ? 'Одобрено' : 'Отказано';
+        const lead  = approved
+            ? (many ? 'Игрок понесёт наказание по следующим пунктам общих правил серверов;' : 'Игрок понесёт наказание по следующему пункту общих правил серверов;')
+            : (many ? 'Нарушение не подтверждено. Тем не менее, обратите внимание на следующие пункты правил;' : 'Нарушение не подтверждено. Тем не менее, обратите внимание на следующий пункт правил;');
+        const spoilers = rules.map(ruleSpoiler).join('\n');
+        return `[SIZE=6][COLOR=rgb(255,255,255)][I]Ваша жалоба была рассмотрена и получает статус — [/I][/COLOR][COLOR=${color}][I]${word}[/I][/COLOR][COLOR=rgb(255,255,255)][I].\n${lead}[/I][/COLOR][/SIZE]\n${spoilers}`;
+    }
+    Object.keys(RULES).forEach(rule => {
+        const r = RULES[rule];
+        DEFAULT_TEMPLATES.players.push(
+            { id:r.a, title:'Одобрено', prefix:P.ACCEPT,   isPinned:false, isNew:false, uses:0, isRaw:true, content: ruleBody(true, rule) },
+            { id:r.d, title:'Отказано', prefix:P.UNACCEPT, isPinned:false, isNew:false, uses:0, isRaw:true, content: ruleBody(false, rule) }
+        );
+    });
+
+    // достраиваем теги/заголовки шаблонов игроков по номеру пункта правил
+    (function() {
+    // короткие имена и поисковые теги для ВСЕХ 72 пунктов таблицы RULES —
+    // сверены с актуальными «Общими правилами серверов» (текст от июля 2026)
     const ruleMapping = {
         // --- РАЗДЕЛ 2: ИГРОВОЙ ПРОЦЕСС ---
-        '2.01': { short: 'RP (Нарушение RP)', tags: 'rp, рп, нарушение рп, поведение, не по рп, нонрп' },
-        '2.02': { short: 'AFK (Уход от RP)', tags: 'afk, авк, уход от рп, уход от ареста, офф от рп, уход, лив' },
-        '2.03': { short: 'NRP Drive (НонРП езда)', tags: 'nrp drive, нонрп драйв, нонрп езда, езда, срезы, встречка, поля, неправдоподобная езда' },
-        '2.04': { short: 'Помеха (Помеха игрокам)', tags: 'помеха, помеха работе, инкассаторам, дальнобойщикам, таран, мешает, помеха игровому процессу' },
-        '2.05': { short: 'Обман (OOC/IC Обман)', tags: 'обман, оос обман, ic обман, развод, кидок, скам, украл деньги' },
-        '2.07': { short: 'AFK без ESC (Помеха)', tags: 'afk без esc, помеха, афк на дороге, афк в проходе, кик' },
-        '2.08': { short: 'Аморальные действия', tags: 'аморалка, аморальные действия, секс отыгровки, изнасилование, варн' },
-        '2.09': { short: 'Слив склада', tags: 'слив склада, слив фамы, слив склада фракции, ресурсы' },
-        '2.10': { short: 'Обман в /do', tags: 'обман в до, обман do, do, вранье в до' },
-        '2.11': { short: 'Личный транспорт', tags: 'рабочий транспорт в личных целях, фракционный транспорт, фракция' },
-        '2.12': { short: 'Помеха медиа лицам', tags: 'помеха стримеру, помеха блогеру, стримснайп, мешает стриму' },
-        '2.13': { short: 'DB (DriveBy)', tags: 'db, дб, таран, убийство машиной, нанесение урона транспортом' },
-        '2.15': { short: 'TK (Team Kill)', tags: 'tk, тк, тим килл, убийство своих, огонь по своим, фракция' },
-        '2.16': { short: 'SK (Spawn Kill)', tags: 'sk, ск, спавн килл, убийство на спавне, титулка, база' },
-        '2.18': { short: 'MG (Meta Gaming)', tags: 'mg, мг, метагейминг, оос в ic, информация из реальности, чат' },
-        '2.19': { short: 'DM (Death Match)', tags: 'dm, дм, дезматч, убийство без причины, нанесение урона' },
-        '2.20': { short: 'Mass DM', tags: 'масс дм, mass dm, масс убийство, расстрел, убийство троих' },
-        '2.21': { short: 'Обход системы', tags: 'обход системы, багоюз системы, передача денег через багажник, махинации' },
-        '2.22': { short: 'Сторонний софт', tags: 'софт, читы, читер, скрипты, макросы, стороннее по, сборка' },
-        '2.23': { short: 'Скрытие багов', tags: 'скрытие багов, багоюз, скрытие ошибок, заблуждение' },
-        '2.24': { short: 'Скрытие нарушителей', tags: 'соучастие, скрытие злоумышленников, покрывательство, чсп' },
-        '2.25': { short: 'Вред репутации', tags: 'вред проекту, репутация, слив проекта' },
-        '2.26': { short: 'Вред ресурсам', tags: 'вред ресурсам, дудос, ddos, вред форуму, вред серверам' },
-        '2.27': { short: 'Слив инфы админов', tags: 'слив админ инфы, распространение переписок, слив админки' },
-        '2.28': { short: 'Покупка/Продажа ИВ', tags: 'вирты, покупка вирт, продажа вирт, ив, покупка ив, черны рынок' },
-        '2.30': { short: 'Ущерб экономике', tags: 'раздача денег, порча экономики, ущерб экономике' },
-        '2.31': { short: 'Реклама проектов', tags: 'реклама, сторонние проекты, пиар каналов, ссылки' },
-        '2.32': { short: 'Обман администрации', tags: 'обман адм, введение в заблуждение, подделка док-в' },
-        '2.33': { short: 'Уязвимость правил', tags: 'уязвимость правил, обход правил, дыры в правилах' },
-        '2.40': { short: 'Поля на рабочем тс', tags: 'езда по полям, рабочее тс, грузовик, курьер' },
-        '2.45': { short: 'Наказание от Команды', tags: 'команда проекта, спец администрация' },
-        '2.47': { short: 'Поля на грузовом тс', tags: 'поля, грузовик, фура, езда по полям, дальнобой' },
-        '2.53': { short: 'Баги стрельбы (+C)', tags: '+c, плюс ц, отводы, слайды, сбив анимации, стрельба' },
-        '2.54': { short: 'Оскорбление адм', tags: 'оск адм, неуважение к адм, неадекват адм, угрозы адм' },
+        '2.01': { short: 'НонРП поведение', tags: 'rp, рп, нонрп, nonrp, поведение, не по рп, крыша машины, езда на крыше, столы казино, помеха собеседованию' },
+        '2.02': { short: 'Уход от RP', tags: 'уход от рп, afk, афк, вышел из игры, оффнулся, лив, релог, выход при задержании, уход от ареста, побег в интерьер, зеленая зона, игнор отыгровок' },
+        '2.03': { short: 'NonRP Drive', tags: 'nonrp drive, нонрп драйв, нонрп езда, неправдоподобная езда, скутер по горам, аварийные ситуации, поля, срезы, встречка, драйв' },
+        '2.04': { short: 'Помеха работе', tags: 'помеха, таран, дальнобойщик, дальнобойщикам, инкассатор, инкассаторам, помеха работе, мешает работать' },
+        '2.05': { short: 'Обман / скам', tags: 'обман, скам, кидок, развод, оос обман, ic обман, кинул на деньги, украл, не вернул, мошенничество' },
+        '2.07': { short: 'AFK без ESC', tags: 'afk, афк, без esc, стоит на дороге, дверной проем, метка вызова, кик, kick' },
+        '2.08': { short: 'Аморалка', tags: 'аморалка, аморальные действия, секс отыгровки, изнасилование, домогательство, непристойное' },
+        '2.09': { short: 'Слив склада', tags: 'слив склада, склад фракции, склад семьи, слив фамы, ресурсы, лимит склада, исключение из семьи' },
+        '2.10': { short: 'Обман в /do', tags: 'обман в до, do, /do, вранье в до, неправда в до' },
+        '2.11': { short: 'Рабочий транспорт', tags: 'рабочий транспорт, фракционный транспорт, личные цели, служебная машина' },
+        '2.12': { short: 'Помеха медиа', tags: 'помеха стримеру, блогер, стример, медиа, стримснайп, мешает стриму, убил стримера' },
+        '2.13': { short: 'DB (DriveBy)', tags: 'db, дб, драйв бай, driveby, таран, сбил машиной, убийство машиной, урон транспортом, переехал' },
+        '2.15': { short: 'TK (TeamKill)', tags: 'tk, тк, тим килл, тимкилл, убийство своих, союзники, огонь по своим, убил члена фракции' },
+        '2.16': { short: 'SK (SpawnKill)', tags: 'sk, ск, спавн килл, спавнкилл, убийство на спавне, титульная территория, титулка, место появления, выход из интерьера' },
+        '2.18': { short: 'MG (MetaGaming)', tags: 'mg, мг, метагейминг, оос информация, оос в ic, скин донат вирты в чате' },
+        '2.19': { short: 'DM (DeathMatch)', tags: 'dm, дм, дезматч, дезмач, убийство без причины, стрелял, расстрелял, урон, убил без повода, дм зона' },
+        '2.20': { short: 'Mass DM', tags: 'масс дм, mass dm, массдм, масс убийство, расстрел толпы, убил троих, массовое убийство' },
+        '2.21': { short: 'Обход системы', tags: 'обход системы, багоюз, баги сервера, аптечка, перепродажа, махинации, злоупотребление функциями' },
+        '2.22': { short: 'Читы / софт', tags: 'читы, чит, читер, софт, стороннее по, макросы, эмулятор, скрипты, сборка, hack, хак, cheat, изменение файлов' },
+        '2.23': { short: 'Скрытие ошибок', tags: 'скрытие багов, скрытие ошибок, заблуждение администрации, знал о баге' },
+        '2.24': { short: 'Покрывательство', tags: 'скрытие нарушителей, покрывательство, соучастие, знал о читере, чсп' },
+        '2.25': { short: 'Вред репутации', tags: 'вред репутации, репутация проекта, очернение, слив проекта' },
+        '2.26': { short: 'Вред ресурсам', tags: 'вред ресурсам, ддос, ddos, атака, вред серверу, вред форуму' },
+        '2.27': { short: 'Слив админ-инфы', tags: 'слив админки, внутренняя информация, переписка администрации, слив переписки' },
+        '2.28': { short: 'Продажа виртов', tags: 'вирты, виртов, покупка виртов, продажа виртов, ив, реальные деньги, черный рынок, обмен доната, пополнение доната' },
+        '2.30': { short: 'Ущерб экономике', tags: 'ущерб экономике, раздача денег, раздает деньги, раздача имущества, порча экономики' },
+        '2.31': { short: 'Реклама проектов', tags: 'реклама, сторонний проект, дискорд, ютуб, канал, ссылки, пиар' },
+        '2.32': { short: 'Обман админов', tags: 'обман администрации, подделка доказательств, монтаж, искажение, ввел в заблуждение, помощь с обзвоном' },
+        '2.33': { short: 'Уязвимость правил', tags: 'уязвимость правил, дыра в правилах, обход правил, формально не нарушил, долг через трейд' },
+        '2.37': { short: 'OOC-угрозы', tags: 'угрозы, оос угрозы, ирл угрозы, угроза жизни, угроза расправой, завуалированные угрозы' },
+        '2.38': { short: 'Слив личной инфы', tags: 'личная информация, слив данных, деанон, адрес, номер телефона, фото, родственники' },
+        '2.39': { short: 'Злоупотребление', tags: 'злоупотребление нарушениями, шесть нарушений, систематические нарушения, рецидив, история наказаний' },
+        '2.40': { short: 'Деструктив', tags: 'деструктив, деструктивные действия, призыв покинуть проект, неконструктивная критика, бунт' },
+        '2.42': { short: 'Продажа за реал', tags: 'продажа аккаунта, продажа имущества, реал, за реальные деньги, продажа акка' },
+        '2.43': { short: 'Продажа промо', tags: 'бонус код, промокод, продажа промокода, обмен промокода, покупка промокода' },
+        '2.47': { short: 'Поля на грузовом', tags: 'поля, грузовой транспорт, фура, дальнобой, курьер, инкассатор, срез через поля' },
+        '2.48': { short: 'Продажа репутации', tags: 'репутация семьи, продажа репутации, трансфер репутации, фама, скрытие читеров лидером' },
+        '2.50': { short: 'Арест в казино', tags: 'задержание в казино, арест в казино, аукцион, интерьер казино, мероприятие, потерял ставку' },
+        '2.52': { short: 'Аксессуары', tags: 'аксессуары, огромный аксессуар, непристойный образ, неадекватные аксессуары' },
+        '2.53': { short: 'Название с матом', tags: 'название семьи, название бизнеса, нецензурное название, мат в названии, реклама казино, букмекер, бренд' },
+        '2.54': { short: 'Оскорбление адм.', tags: 'оскорбление администрации, оск адм, неуважение, хамство админу, угрозы админу, жалоба с матом' },
+        '2.55': { short: 'Багоюз анимации', tags: '+c, плюс ц, сбив анимации, сбив темпа, отводы, слайды, баг анимации, быстрое перемещение' },
+        '2.57': { short: 'Невозврат долга', tags: 'долг, займ, не вернул долг, кредит, занял и пропал, должник' },
 
-        // --- РАЗДЕЛ 3: ПРАВИЛА ЧАТА ---
-        '3.01': { short: 'Общепринятый язык', tags: 'язык, транслит, чат, русский язык' },
-        '3.02': { short: 'Caps Lock (Капс)', tags: 'капс, верхний регистр, caps, заглавные буквы, крупный текст' },
-        '3.03': { short: 'Оскорбление игроков', tags: 'оск, оскорбление, оск игроков, мат, брань' },
-        '3.04': { short: 'Упоминание родных', tags: 'упом род, mq, оск род, родня, маме привет' },
-        '3.05': { short: 'Flood (Флуд)', tags: 'флуд, flood, спам, чат, повторение сообщений' },
-        '3.06': { short: 'Злоуп. символами', tags: 'знаки препинания, злоупотребление символами, спам знаками' },
-        '3.21': { short: 'Запрещенная реклама', tags: 'реклама в чат, вип чат, гос чат, коммерция' },
-        '3.22': { short: 'Объявления в госс', tags: 'рынок в больнице, рынок в госс, торговля, продажа в здании' },
-        '3.23': { short: 'Мат в VIP-чат', tags: 'вип чат, vip чат, мат в вип, нецензурная брань' },
+        // --- РАЗДЕЛ 3: ИГРОВЫЕ ЧАТЫ ---
+        '3.02': { short: 'Caps Lock (капс)', tags: 'капс, caps, caps lock, верхний регистр, заглавные буквы' },
+        '3.03': { short: 'Оскорбления (OOC)', tags: 'оскорбление, оск, мат, брань, расизм, дискриминация, сексизм, оос чат' },
+        '3.04': { short: 'Упоминание родных', tags: 'упоминание родных, оск родных, мать, mq, rnq, родня, семья в чате' },
+        '3.05': { short: 'Flood (флуд)', tags: 'флуд, flood, спам, повторяющиеся сообщения, три сообщения' },
+        '3.06': { short: 'Спам символами', tags: 'знаки препинания, символы, многоточие, вопросы, восклицания, растягивание слов' },
+        '3.08': { short: 'Слив в глобалку', tags: 'слив, слив в чат, глобальный чат, слив базы, слив данных в чат' },
+        '3.10': { short: 'Фейк-админ', tags: 'фейк админ, выдает себя за админа, представился админом, угрожает блокировкой' },
+        '3.11': { short: 'Обман командами', tags: 'обман командами, me, do, pay, sellmycar, развод командами, фейк команда, поднять кошелек' },
+        '3.12': { short: 'Неверный репорт', tags: 'репорт, report, жалоба транслитом, репорт капсом, оффтоп, спам репортами' },
+        '3.14': { short: 'Музыка в войсе', tags: 'музыка в войс, voice, войс чат, музыка в микрофон' },
+        '3.16': { short: 'Шумы в войсе', tags: 'шумы, звуки, фон, микрофон, кричит, перебивает, искажение звука' },
+        '3.18': { short: 'Политика/религия', tags: 'политика, религия, национальность, расовые темы, провокация, срач в чате' },
+        '3.19': { short: 'Изменение голоса', tags: 'войс чейнджер, изменение голоса, voice changer, программа для голоса' },
+        '3.20': { short: 'Транслит', tags: 'транслит, privet, латиница, translit, русский латиницей' },
+        '3.21': { short: 'Промо в чате', tags: 'реклама промокода, промо в чате, промокод в игре' },
+        '3.22': { short: 'Реклама в госах', tags: 'объявление в больнице, реклама в госе, продажа в здании, рынок в больнице, госорганизация' },
+        '3.23': { short: 'Мат в VIP-чате', tags: 'вип чат, vip, мат в випе, нецензурные слова, завуалированный мат' },
+        '3.24': { short: 'Токсичность (IC)', tags: 'токсик, токсичное поведение, унижение, оскорбление в ic, буллинг, травля' },
 
-        // --- РАЗДЕЛ 4: НИКНЕЙМЫ / ПРОМОКОДЫ ---
-        '4.05': { short: 'Реклама в нике', tags: 'ник реклама, реклама сторонних ресурсов, сайт в нике' },
-        '4.08': { short: 'Символы/цифры в нике', tags: 'нонрп ник, цифры в нике, символы в нике, ошибки в нике' },
-        '4.09': { short: 'Матерный/Оск ник', tags: 'оск ник, мат в нике, политика в нике, религия в нике' },
-        '4.10': { short: 'Фейк никнейм', tags: 'фейк ник, подмена букв, фейк админа, подделка аккаунта' },
-        '4.11': { short: 'Бизнес на твинках', tags: 'твинки, бизнес, владение бизнесом, мультиаккаунт' },
-        '4.14': { short: 'Неактив компании', tags: 'неактивность тк, строительная компания, обнуление тк, не заходил' },
-        '4.15': { short: 'Фейк промокод', tags: 'промокод, фейк промо, промокод блогера, копия промо' }
+        // --- РАЗДЕЛ 4: ИГРОВЫЕ АККАУНТЫ ---
+        '4.03': { short: 'Передача аккаунта', tags: 'передача аккаунта, передал акк, дал пароль, пин код, доступ к аккаунту' },
+        '4.04': { short: 'Лимит аккаунтов', tags: 'твинки, четвертый аккаунт, мультиаккаунт, много акков, лимит три аккаунта' },
+        '4.05': { short: 'Перекид имущества', tags: 'трансфер, передача ценностей, перекид, передача между аккаунтами, багажник, твинк, удержание имущества' },
+        '4.06': { short: 'Формат никнейма', tags: 'ник, никнейм, формат ника, имя фамилия, не рп ник, нижнее подчеркивание' },
+        '4.07': { short: 'Заглавные в нике', tags: 'заглавные в нике, капс в нике, большие буквы в нике' },
+        '4.08': { short: 'НонРП никнейм', tags: 'нонрп ник, цифры в нике, кличка, бессмысленный ник, символы в нике' },
+        '4.09': { short: 'Мат в никнейме', tags: 'мат в нике, оскорбительный ник, оск ник, политика в нике, религия в нике' },
+        '4.10': { short: 'Фейковый ник', tags: 'фейк ник, похожий ник, копия ника, подмена букв, ник как у админа' },
+        '4.11': { short: 'Бизнес на твинке', tags: 'бизнес на твинке, твинк бизнес, владение бизнесом, бизнес не с основы' },
+        '4.14': { short: 'Неактив компании', tags: 'неактив, транспортная компания, строительная компания, обнуление компании, не заходил пять дней' },
+        '4.15': { short: 'Фейк-промокод', tags: 'фейк промокод, промокод блогера, пассивный заработок, не реферал' }
     };
 
-    // Карта жестких базовых тегов для стандартных (общих) вердиктов по ID
     const generalTags = {
         'p1': 'игроки, жалоба, рассмотрение, закреплено, в работе',
         'p2': 'игроки, жалоба, одобрено, наказание выдано, регламент, закреплено',
@@ -616,93 +455,55 @@
         'p9': 'игроки, жалоба, отказано, пункт правил, ручной выбор'
     };
 
-    // Автоматически определяем доступный массив (в глобальной области или внутри структуры скрипта)
-    const templatesList = (typeof DEFAULT_TEMPLATES !== 'undefined' && DEFAULT_TEMPLATES.players) || (typeof players !== 'undefined' ? players : null);
+    DEFAULT_TEMPLATES.players.forEach(tpl => {
+        // номер пункта правил ищем сначала в тегах, потом в заголовке, потом в тексте BB-кода
+        let ruleNum = null;
+        if (tpl.tags)                ruleNum = (tpl.tags.match(/\b\d+\.\d+\b/) || [])[0] || null;
+        if (!ruleNum && tpl.title)   ruleNum = (tpl.title.match(/\b\d+\.\d+\b/) || [])[0] || null;
+        if (!ruleNum && tpl.content) ruleNum = (tpl.content.match(/\[I\](\d+\.\d+)\.\[\/I\]/) || [])[1] || null;
 
-    if (templatesList && Array.isArray(templatesList)) {
-        templatesList.forEach(tpl => {
-            let ruleNum = null;
+        const isApproved = tpl.title.toLowerCase().includes('одобрено');
+        const isRejected = tpl.title.toLowerCase().includes('отказано');
+        const statusTag  = isApproved ? 'одобрено' : isRejected ? 'отказано' : 'жалоба';
+        const baseStatus = isApproved ? 'Одобрено' : isRejected ? 'Отказано' : 'Рассмотрено';
 
-            // Шаг 1. Пытаемся извлечь пункт правил из текущих тегов (поиск подстроки вида '2.01')
-            if (tpl.tags) {
-                const matchTags = tpl.tags.match(/\b\d+\.\d+\b/);
-                if (matchTags) ruleNum = matchTags[0];
-            }
+        if (ruleNum && ruleMapping[ruleNum]) {
+            tpl.title = `${baseStatus} — ${ruleMapping[ruleNum].short} [${ruleNum}]`;
+            tpl.tags  = `игроки, жалоба, ${statusTag}, пункт ${ruleNum}, ${ruleMapping[ruleNum].tags}`;
+        } else if (ruleNum) {
+            tpl.title = `${baseStatus} — Пункт правил ${ruleNum}`;
+            tpl.tags  = `игроки, жалоба, ${statusTag}, пункт ${ruleNum}`;
+        } else if (generalTags[tpl.id]) {
+            tpl.tags = generalTags[tpl.id];
+        } else {
+            tpl.tags = `игроки, жалоба, ${statusTag}, ${tpl.title.toLowerCase().replace(/[^a-zа-я0-9\s]/g, '')}`;
+        }
+    });
+    })();
 
-            // Шаг 2. Если в тегах пусто, ищем пункт правил в самом названии шаблона
-            if (!ruleNum && tpl.title) {
-                const matchTitle = tpl.title.match(/\b\d+\.\d+\b/);
-                if (matchTitle) ruleNum = matchTitle[0];
-            }
-
-            // Шаг 3. Если заголовок не помог, парсим текст BB-кода из content (например: [I]2.01.[/I])
-            if (!ruleNum && tpl.content) {
-                const matchContent = tpl.content.match(/\[I\](\d+\.\d+)\.\[\/I\]/);
-                if (matchContent) ruleNum = matchContent[1];
-            }
-
-            // Определяем глобальный маркер статуса на основе текста в заголовке
-            const isApproved = tpl.title.toLowerCase().includes('одобрено');
-            const isRejected = tpl.title.toLowerCase().includes('отказано');
-            const statusTag = isApproved ? 'одобрено' : isRejected ? 'отказано' : 'жалоба';
-
-            if (ruleNum) {
-                // Если номер пункта найден в базе ruleMapping
-                if (ruleMapping[ruleNum]) {
-                    const baseStatus = isApproved ? 'Одобрено' : isRejected ? 'Отказано' : 'Рассмотрено';
-
-                    // Перезаписываем заголовок в идеальный читаемый вид
-                    tpl.title = `${baseStatus} — ${ruleMapping[ruleNum].short} [${ruleNum}]`;
-
-                    // Перезаписываем теги мощным поисковым набором
-                    tpl.tags = `игроки, жалоба, ${statusTag}, пункт ${ruleNum}, ${ruleMapping[ruleNum].tags}`;
-                } else {
-                    // Если пункт правил обнаружен, но его нет в карте ruleMapping (страховочный вариант)
-                    const baseStatus = isApproved ? 'Одобрено' : isRejected ? 'Отказано' : 'Рассмотрено';
-                    tpl.title = `${baseStatus} — Пункт правил ${ruleNum}`;
-                    tpl.tags = `игроки, жалоба, ${statusTag}, пункт ${ruleNum}`;
-                }
-            } else {
-                // Обработка стандартных административных шаблонов, не привязанных к конкретным пунктам правил
-                if (generalTags[tpl.id]) {
-                    tpl.tags = generalTags[tpl.id];
-                } else {
-                    // Универсальный генератор тегов для любых кастомных элементов
-                    tpl.tags = `игроки, жалоба, ${statusTag}, ${tpl.title.toLowerCase().replace(/[^a-zа-я0-9\s]/g, '')}`;
-                }
-            }
-        });
-        console.log(`[Успех] Оптимизатор успешно пересобрал базу данных! Обработано шаблонов: ${templatesList.length}`);
-    } else {
-        console.error("[Ошибка] Не удалось обнаружить массив 'players' для выполнения автоматической оптимизации.");
-    }
-})();
-
-    // ═══════════════════════════════════════════════════════════════
-    //  СОСТОЯНИЕ
-    // ═══════════════════════════════════════════════════════════════
+    // СОСТОЯНИЕ
     let TPLS     = loadTemplates();
     let SETS     = loadSettings();
     let STATS    = loadStats();
     let HIST     = loadHistory();
-    let curTheme = localStorage.getItem(STORAGE.THEME) || 'amber';
+    let curTheme = GM_getValue(STORAGE.THEME) || 'amber';
     let curTab   = 'players';
     let manageMode = false;
     let floodIv  = null;
     let styleEl  = null;
+    let lastEditorSnapshot = null;
+    let lastInsertedHTML   = null;
 
     const theme = () => {
         const t = THEMES[curTheme];
-        if (!t) { curTheme = 'amber'; localStorage.setItem(STORAGE.THEME, 'amber'); return THEMES.amber; }
+        if (!t) { curTheme = 'amber'; GM_setValue(STORAGE.THEME, 'amber'); return THEMES.amber; }
         return t;
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ЗАГРУЗКА / СОХРАНЕНИЕ
-    // ═══════════════════════════════════════════════════════════════
+    // ЗАГРУЗКА / СОХРАНЕНИЕ
     function loadTemplates() {
         try {
-            const raw = localStorage.getItem(STORAGE.TEMPLATES);
+            const raw = GM_getValue(STORAGE.TEMPLATES);
             if (!raw) {
                 const defs = deepClone(DEFAULT_TEMPLATES);
                 defs.custom = [];
@@ -721,34 +522,32 @@
             if (Array.isArray(data.custom)) result.custom = data.custom;
             return result;
         } catch(e) {
-            localStorage.removeItem(STORAGE.TEMPLATES);
+            GM_deleteValue(STORAGE.TEMPLATES);
             const defs = deepClone(DEFAULT_TEMPLATES);
             defs.custom = [];
             return defs;
         }
     }
     function loadSettings() {
-        const def = { autoSubmit: false, floodControl: true, serverName: 'ASTANA', mgTerms: [...DEFAULT_MG_TERMS], minBioWords: 200, hotkeys: true };
-        try { const s = JSON.parse(localStorage.getItem(STORAGE.SETTINGS)); return s ? { ...def, ...s } : def; }
+        const def = { autoSubmit: false, floodControl: true, serverName: 'ASTANA', mgTerms: [...DEFAULT_MG_TERMS], minBioWords: 200, hotkeys: true, uiMode: 'modal' };
+        try { const s = JSON.parse(GM_getValue(STORAGE.SETTINGS)); return s ? { ...def, ...s } : def; }
         catch(e) { return def; }
     }
     function loadStats() {
-        try { return JSON.parse(localStorage.getItem(STORAGE.STATS)) || { total: 0, byPrefix: {}, byTab: {}, byDay: {} }; }
+        try { return JSON.parse(GM_getValue(STORAGE.STATS)) || { total: 0, byPrefix: {}, byTab: {}, byDay: {} }; }
         catch(e) { return { total: 0, byPrefix: {}, byTab: {}, byDay: {} }; }
     }
     function loadHistory() {
-        try { return JSON.parse(localStorage.getItem(STORAGE.HISTORY)) || []; }
+        try { return JSON.parse(GM_getValue(STORAGE.HISTORY)) || []; }
         catch(e) { return []; }
     }
-    function saveTemplates(d) { localStorage.setItem(STORAGE.TEMPLATES, JSON.stringify({ version: STORAGE_VERSION, data: d || TPLS })); }
-    function saveSettings()   { localStorage.setItem(STORAGE.SETTINGS, JSON.stringify(SETS)); }
-    function saveStats()      { localStorage.setItem(STORAGE.STATS, JSON.stringify(STATS)); }
-    function saveHistory()    { localStorage.setItem(STORAGE.HISTORY, JSON.stringify(HIST)); }
+    function saveTemplates(d) { GM_setValue(STORAGE.TEMPLATES, JSON.stringify({ version: STORAGE_VERSION, data: d || TPLS })); }
+    function saveSettings()   { GM_setValue(STORAGE.SETTINGS, JSON.stringify(SETS)); }
+    function saveStats()      { GM_setValue(STORAGE.STATS, JSON.stringify(STATS)); }
+    function saveHistory()    { GM_setValue(STORAGE.HISTORY, JSON.stringify(HIST)); }
     function deepClone(o)     { return JSON.parse(JSON.stringify(o)); }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  УТИЛИТЫ
-    // ═══════════════════════════════════════════════════════════════
+    // УТИЛИТЫ
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function fmtDate(d) { return new Date(d).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'}); }
     function fmtTime(d) { return new Date(d).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}); }
@@ -768,15 +567,15 @@
     }
     const LAYOUT = {q:'й',w:'ц',e:'у',r:'к',t:'е',y:'н',u:'г',i:'ш',o:'щ',p:'з','[':'х',']':'ъ',a:'ф',s:'ы',d:'в',f:'а',g:'п',h:'р',j:'о',k:'л',l:'д',';':'ж',"'":'э',z:'я',x:'ч',c:'с',v:'м',b:'и',n:'т',m:'ь',',':'б','.':'ю'};
     const toRu = s => s.split('').map(c => LAYOUT[c]||c).join('');
-    const fuzz = (q,t) => { if(!q) return true; const n=q.toLowerCase(); const tx=t.toLowerCase(); return tx.includes(n)||tx.includes(toRu(n)); };
+    // нормализация для поиска: регистр + ё→е, чтобы «запрещенное» находило «запрещённое»
+    const norm = s => String(s).toLowerCase().replace(/ё/g,'е');
+    const fuzz = (q,t) => { if(!q) return true; const n=norm(q); const tx=norm(t); return tx.includes(n)||tx.includes(toRu(n)); };
     function getAuthor() {
         const el = document.querySelector(SEL.usernameLink);
         return { name: el ? el.textContent.trim() : 'Игрок', id: el ? (el.getAttribute('data-user-id')||'') : '' };
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ПЛЕЙСХОЛДЕРЫ
-    // ═══════════════════════════════════════════════════════════════
+    // ПЛЕЙСХОЛДЕРЫ
     function applyPH(text) {
         const {name, id} = getAuthor();
         const mention = id ? `[USER=${id}]${name}[/USER]` : name;
@@ -791,10 +590,44 @@
             .replace(/\{thread_id\}/g, threadId);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ВСТАВКА ШАБЛОНА
-    // ═══════════════════════════════════════════════════════════════
+    // ВСТАВКА ШАБЛОНА
+    const IMG_HEADER      = 'https://i.postimg.cc/9QhjNYgx/Untitled38-20260604131933.png';
+    const IMG_FOOTER      = 'https://i.postimg.cc/jjMvPRJ2/Untitled36-20260604131154.png';
+    const IMG_FOOTER_LINK = 'https://postimg.cc/gw6vPFsb';
+
+    // общая обёртка поста (шапка-картинка, приветствие, тело, подпись, футер-картинка)
+    function wrapPost(mention, srv, bodyBlock) {
+        return `[CENTER][FONT=times new roman]\n` +
+            `[COLOR=rgb(209,213,216)][I][IMG]${IMG_HEADER}[/IMG][/I][/COLOR]\n\n` +
+            `[COLOR=rgb(255,255,255)][SIZE=7][I]${greeting()}, уважаемый [/I][/SIZE][/COLOR]` +
+            `[COLOR=rgb(209,213,216)][SIZE=7][I]${mention}![/I][/SIZE][/COLOR]\n\n` +
+            `${bodyBlock}\n\n` +
+            `[URL='${IMG_FOOTER_LINK}'][IMG]${IMG_FOOTER}[/IMG][/URL]\n\n` +
+            `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]Приятной игры на сервере[/I][/SIZE][/COLOR] ` +
+            `[COLOR=rgb(84,172,210)][SIZE=6][I]${srv}[/I][/SIZE][/COLOR][/COLOR]\n` +
+            `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]С уважением,[/I][/SIZE][/COLOR] ` +
+            `[COLOR=rgb(209,72,65)][SIZE=6][I]Администрация сервера[/I][/SIZE][/COLOR][/COLOR]\n` +
+            `[/FONT][/CENTER]`;
+    }
+
+    // вставляет готовый BB-код в редактор и завершает цикл (префикс/автосабмит/статистика)
+    function finishInsert(tpl, fin) {
+        const ed = document.querySelector(SEL.editor);
+        if (!ed) { alert('❌ Редактор не найден. Откройте форму ответа.'); return; }
+        lastEditorSnapshot = ed.innerHTML;
+        ed.innerHTML = fin.replace(/\n/g,'<br>');
+        lastInsertedHTML = ed.innerHTML;
+        ['input','keyup','change'].forEach(ev => ed.dispatchEvent(new Event(ev,{bubbles:true})));
+        document.querySelector(SEL.overlayClose)?.click();
+        closeMain();
+        if (tpl.prefix) setPrefix(tpl.prefix);
+        if (SETS.autoSubmit) submit();
+        recordUse(tpl, curTab);
+        showNotification(theme().dbh ? '✔ Задача выполнена' : '✅ Шаблон вставлен', 'success', undoLastInsert);
+    }
+
     function insertTemplate(tpl) {
+        if (!confirmOverwriteIfNeeded()) return;
         try {
             const {name, id} = getAuthor();
             const mention = id ? `[USER=${id}]${name}[/USER]` : name;
@@ -803,29 +636,9 @@
 
             // isRaw: контент уже содержит готовый BB-код тела — только плейсхолдеры
             if (tpl.isRaw) {
-                let rawBody = applyPH(String(tpl.content||''))
+                const rawBody = applyPH(String(tpl.content||''))
                     .replace(/\{mention\}/g, mention);
-                const fin =
-                    `[CENTER][FONT=times new roman]\n` +
-                    `[COLOR=rgb(209,213,216)][I][IMG]https://i.postimg.cc/9QhjNYgx/Untitled38-20260604131933.png[/IMG][/I][/COLOR]\n\n` +
-                    `[COLOR=rgb(255,255,255)][SIZE=7][I]${greeting()}, уважаемый [/I][/SIZE][/COLOR]` +
-                    `[COLOR=rgb(209,213,216)][SIZE=7][I]${mention}![/I][/SIZE][/COLOR]\n\n` +
-                    `${rawBody}\n\n` +
-                    `[URL='https://postimg.cc/gw6vPFsb'][IMG]https://i.postimg.cc/jjMvPRJ2/Untitled36-20260604131154.png[/IMG][/URL]\n\n` +
-                    `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]Приятной игры на сервере[/I][/SIZE][/COLOR] ` +
-                    `[COLOR=rgb(84,172,210)][SIZE=6][I]${srv}[/I][/SIZE][/COLOR][/COLOR]\n` +
-                    `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]С уважением,[/I][/SIZE][/COLOR] ` +
-                    `[COLOR=rgb(209,72,65)][SIZE=6][I]Администрация сервера[/I][/SIZE][/COLOR][/COLOR]\n` +
-                    `[/FONT][/CENTER]`;
-                const ed = document.querySelector(SEL.editor);
-                if (!ed) { alert('❌ Редактор не найден. Откройте форму ответа.'); return; }
-                ed.innerHTML = fin.replace(/\n/g,'<br>');
-                ['input','keyup','change'].forEach(ev => ed.dispatchEvent(new Event(ev,{bubbles:true})));
-                document.querySelector(SEL.overlayClose)?.click();
-                closeMain();
-                if (tpl.prefix) setPrefix(tpl.prefix);
-                if (SETS.autoSubmit) submit();
-                recordUse(tpl, curTab);
+                finishInsert(tpl, wrapPost(mention, srv, rawBody));
                 return;
             }
 
@@ -845,38 +658,15 @@
             else if (tpl.prefix===P.RESHENO)    rawBody = hl(rawBody,'Решено');
             else if (tpl.prefix===P.CLOSE)      rawBody = hl(rawBody,'Закрыто');
 
-            const fin =
-                `[CENTER][FONT=times new roman]\n` +
-                `[COLOR=rgb(209,213,216)][I][IMG]https://i.postimg.cc/9QhjNYgx/Untitled38-20260604131933.png[/IMG][/I][/COLOR]\n\n` +
-                `[COLOR=rgb(255,255,255)][SIZE=7][I]${greeting()}, уважаемый [/I][/SIZE][/COLOR]` +
-                `[COLOR=rgb(209,213,216)][SIZE=7][I]${mention}![/I][/SIZE][/COLOR]\n\n` +
-                `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]\n\n` +
-                `[URL='https://postimg.cc/gw6vPFsb'][IMG]https://i.postimg.cc/jjMvPRJ2/Untitled36-20260604131154.png[/IMG][/URL]\n\n` +
-                `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]Приятной игры на сервере[/I][/SIZE][/COLOR] ` +
-                `[COLOR=rgb(84,172,210)][SIZE=6][I]${srv}[/I][/SIZE][/COLOR][/COLOR]\n` +
-                `[COLOR=rgb(209,213,216)][COLOR=rgb(255,255,255)][SIZE=6][I]С уважением,[/I][/SIZE][/COLOR] ` +
-                `[COLOR=rgb(209,72,65)][SIZE=6][I]Администрация сервера[/I][/SIZE][/COLOR][/COLOR]\n` +
-                `[/FONT][/CENTER]`;
-
-            const ed = document.querySelector(SEL.editor);
-            if (!ed) { alert('❌ Редактор не найден. Откройте форму ответа.'); return; }
-            ed.innerHTML = fin.replace(/\n/g,'<br>');
-            ['input','keyup','change'].forEach(ev => ed.dispatchEvent(new Event(ev,{bubbles:true})));
-
-            document.querySelector(SEL.overlayClose)?.click();
-            closeMain();
-            if (tpl.prefix) setPrefix(tpl.prefix);
-            if (SETS.autoSubmit) submit();
-            recordUse(tpl, curTab);
+            const bodyBlock = `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]`;
+            finishInsert(tpl, wrapPost(mention, srv, bodyBlock));
         } catch(err) {
             console.error('NL Helper insertTemplate:', err);
             alert('❌ Ошибка вставки: ' + err.message);
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ПРЕФИКС
-    // ═══════════════════════════════════════════════════════════════
+    // ПРЕФИКС
     function setPrefix(id) {
         if (typeof XF === 'undefined') { console.warn('XF не определен'); return; }
         const ti = document.querySelector(SEL.titleValue)?.lastChild?.textContent?.trim() || '';
@@ -919,9 +709,7 @@
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  SUBMIT + FLOOD
-    // ═══════════════════════════════════════════════════════════════
+    // SUBMIT + FLOOD
     function submit() {
         clickSubmit();
         if (!SETS.floodControl) return;
@@ -936,9 +724,9 @@
     function doFlood(txt) {
         const m = txt.match(/(\d+)\s*(секунд|минут)/); if(!m) return;
         let s = parseInt(m[1]); if(m[2].includes('минут')) s*=60;
-        localStorage.setItem(STORAGE.FLOOD, Date.now()+s*1000);
+        GM_setValue(STORAGE.FLOOD, Date.now()+s*1000);
         const ed = document.querySelector(SEL.editor);
-        localStorage.setItem(STORAGE.PENDING, ed?ed.innerHTML:'');
+        GM_setValue(STORAGE.PENDING, ed?ed.innerHTML:'');
         floodTimer(s);
     }
     function floodTimer(secs) {
@@ -949,23 +737,22 @@
         floodIv = setInterval(()=>{
             t--; up();
             if(t<=0){
-                clearInterval(floodIv); localStorage.removeItem(STORAGE.FLOOD);
+                clearInterval(floodIv); GM_deleteValue(STORAGE.FLOOD);
                 b.classList.remove('nl-fa'); if(sp) sp.textContent=og;
-                const pd=localStorage.getItem(STORAGE.PENDING);
-                if(pd){ const ed=document.querySelector(SEL.editor); if(ed){ed.innerHTML=pd;ed.dispatchEvent(new Event('input',{bubbles:true}));} localStorage.removeItem(STORAGE.PENDING); }
+                const pd=GM_getValue(STORAGE.PENDING);
+                if(pd){ const ed=document.querySelector(SEL.editor); if(ed){ed.innerHTML=pd;ed.dispatchEvent(new Event('input',{bubbles:true}));} GM_deleteValue(STORAGE.PENDING); }
                 if(SETS.autoSubmit) setTimeout(()=>clickSubmit(),500);
             }
         },1000);
     }
     function checkFlood() {
-        const tg=parseInt(localStorage.getItem(STORAGE.FLOOD)); if(!tg) return;
-        const r=Math.ceil((tg-Date.now())/1000); if(r>0) floodTimer(r); else localStorage.removeItem(STORAGE.FLOOD);
+        const tg=parseInt(GM_getValue(STORAGE.FLOOD)); if(!tg) return;
+        const r=Math.ceil((tg-Date.now())/1000); if(r>0) floodTimer(r); else GM_deleteValue(STORAGE.FLOOD);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  СТАТИСТИКА
-    // ═══════════════════════════════════════════════════════════════
+    // СТАТИСТИКА
     function recordUse(tpl, tabId) {
+        const unlockedBefore = new Set(computeProfile(STATS, TPLS).achievements.filter(a=>a.unlocked).map(a=>a.name));
         tpl.uses = (tpl.uses||0)+1; saveTemplates();
         STATS.total = (STATS.total||0)+1;
         STATS.byPrefix[tpl.prefix] = (STATS.byPrefix[tpl.prefix]||0)+1;
@@ -977,11 +764,12 @@
         HIST.unshift({ id:tpl.id, title:tpl.title, tabId, threadTitle, threadUrl:window.location.href, prefix:tpl.prefix, usedAt:Date.now() });
         if (HIST.length>MAX_HISTORY) HIST.length=MAX_HISTORY;
         saveHistory();
+        computeProfile(STATS, TPLS).achievements.forEach(a => {
+            if (a.unlocked && !unlockedBefore.has(a.name)) showNotification(`🏅 Новая ачивка: ${a.name}!`, 'success');
+        });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ГОРЯЧИЕ КЛАВИШИ
-    // ═══════════════════════════════════════════════════════════════
+    // ГОРЯЧИЕ КЛАВИШИ
     function initHotkeys() {
         document.addEventListener('keydown', e => {
             if (!SETS.hotkeys) return;
@@ -994,7 +782,19 @@
                 e.preventDefault(); e.stopPropagation();
                 openBioAnalyzer(); return;
             }
+            if (e.altKey && (e.key==='a'||e.key==='A'||e.key==='ф'||e.key==='Ф')) {
+                e.preventDefault(); e.stopPropagation();
+                undoLastInsert(); return;
+            }
+            if (e.altKey && (e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л')) {
+                e.preventDefault(); e.stopPropagation();
+                const cmd = document.querySelector('.nl-cmd-ov');
+                if (cmd) cmd.remove(); else openCmdPalette();
+                return;
+            }
             if (e.key==='Escape') {
+                const cmd = document.querySelector('.nl-cmd-ov');
+                if (cmd) { cmd.remove(); return; }
                 if (document.querySelector('.nl-ov')) { closeMain(); return; }
                 if (document.querySelector('.nl-dov')) { document.querySelector('.nl-dov')?.remove(); return; }
             }
@@ -1010,12 +810,15 @@
         }, { capture: true });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  CSS
-    // ═══════════════════════════════════════════════════════════════
+    // CSS
     function buildCSS(hd) {
+        // для DBH-тем догружаем Michroma/Jost тем же импортом Google Fonts (новых хостов нет)
+        const fonts = hd.dbh
+            ? 'Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Michroma&family=Jost:wght@400;500;600;700'
+            : 'Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono';
+        const btnOn = hd.btnText || '#000';
         return `
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=${fonts}&display=swap');
 
 :root {
     --nl-bg:       ${hd.bg};
@@ -1026,11 +829,13 @@
     --nl-text:     ${hd.text};
     --nl-text2:    ${hd.text2};
     --nl-grid:     ${hd.accent}07;
+    --nl-font:       ${hd.dbh ? "'Jost','Rajdhani',sans-serif" : "'Rajdhani',sans-serif"};
+    --nl-font-title: ${hd.dbh ? "'Michroma','Rajdhani',sans-serif" : "'Rajdhani',sans-serif"};
 }
 
 /* ── Кнопки на форуме ── */
 .nl-btn-main {
-    font-family:'Rajdhani',sans-serif !important; font-weight:700 !important;
+    font-family:var(--nl-font) !important; font-weight:700 !important;
     font-size:11px !important; letter-spacing:1px !important; text-transform:uppercase !important;
     background:transparent !important; color:${hd.accent} !important;
     border:1px solid ${hd.accent} !important;
@@ -1039,12 +844,14 @@
     margin:3px 5px 3px 0 !important; height:36px !important;
     display:inline-flex !important; align-items:center !important;
     vertical-align:middle !important; flex-shrink:0 !important;
-    transition:all .2s !important;
+    transition:all .15s !important;
     box-shadow:0 0 10px ${hd.accent}25 !important;
 }
-.nl-btn-main:hover { background:${hd.accent} !important; color:#000 !important; box-shadow:0 0 20px ${hd.accent}55 !important; }
+.nl-btn-main:hover { background:${hd.accent} !important; color:${btnOn} !important; box-shadow:0 0 20px ${hd.accent}55 !important; }
 #nl-bio-btn   { color:#3b82f6 !important; border-color:#3b82f6 !important; box-shadow:0 0 10px #3b82f625 !important; }
 #nl-bio-btn:hover   { background:#3b82f6 !important; color:#fff !important; }
+#nl-wizard-btn { color:#a855f7 !important; border-color:#a855f7 !important; box-shadow:0 0 10px #a855f725 !important; }
+#nl-wizard-btn:hover { background:#a855f7 !important; color:#fff !important; }
 #nl-stats-btn { color:#22c55e !important; border-color:#22c55e !important; box-shadow:0 0 10px #22c55e25 !important; }
 #nl-stats-btn:hover { background:#22c55e !important; color:#fff !important; }
 
@@ -1061,7 +868,7 @@
     position:fixed; inset:0; z-index:99999;
     background:rgba(0,0,0,0.88);
     display:flex; align-items:center; justify-content:center;
-    font-family:'Rajdhani',sans-serif;
+    font-family:var(--nl-font);
     backdrop-filter:blur(5px);
     animation:nl-fade .18s ease;
 }
@@ -1086,7 +893,7 @@
     display:flex; flex-direction:column; flex-shrink:0;
 }
 .nl-logo-area {
-    padding:22px 20px 18px; border-bottom:1px solid ${hd.border};
+    padding:20px 20px 16px; border-bottom:1px solid ${hd.border};
     position:relative; overflow:hidden;
 }
 .nl-logo-area::after {
@@ -1095,7 +902,7 @@
     animation:nl-scan 3s ease-in-out infinite; opacity:.5;
 }
 .nl-logo-text {
-    font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700;
+    font-family:var(--nl-font); font-size:28px; font-weight:700;
     color:${hd.text}; line-height:1; letter-spacing:2px; text-transform:uppercase;
 }
 .nl-logo-text span { color:${hd.accent}; }
@@ -1105,14 +912,14 @@
 }
 
 /* ── Вкладки ── */
-.nl-tabs { flex:1; overflow-y:auto; padding:10px 0; display:flex; flex-direction:column; gap:2px; }
-.nl-tabs::-webkit-scrollbar { width:3px; }
+.nl-tabs { flex:1; overflow-y:auto; padding:8px 0; display:flex; flex-direction:column; gap:2px; }
+.nl-tabs::-webkit-scrollbar { width:4px; }
 .nl-tabs::-webkit-scrollbar-thumb { background:${hd.border}; }
 .nl-tab {
     padding:10px 20px; background:none; border:none;
     border-left:2px solid transparent;
     color:${hd.text2};
-    font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600;
+    font-family:var(--nl-font); font-size:13px; font-weight:600;
     letter-spacing:.05em; text-transform:uppercase;
     cursor:pointer; text-align:left; transition:all .15s;
 }
@@ -1120,12 +927,12 @@
 .nl-tab.active { color:${hd.accent}; border-left-color:${hd.accent}; background:${hd.accent}0d; }
 
 /* ── Кнопки подвала сайдбара ── */
-.nl-sb-foot { padding:14px; border-top:1px solid ${hd.border}; display:flex; flex-direction:column; gap:6px; }
+.nl-sb-foot { padding:12px; border-top:1px solid ${hd.border}; display:flex; flex-direction:column; gap:8px; }
 .nl-hb {
     background:${hd.bg3}; border:1px solid ${hd.border};
-    padding:9px 12px; cursor:pointer; color:${hd.text2};
-    font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:600;
-    letter-spacing:.06em; text-transform:uppercase;
+    padding:10px 12px; cursor:pointer; color:${hd.text2};
+    font-family:var(--nl-font); font-size:12px; font-weight:600;
+    letter-spacing:.05em; text-transform:uppercase;
     transition:all .15s; text-align:left; width:100%;
     clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px));
 }
@@ -1136,15 +943,15 @@
 
 /* ── Топ-панель ── */
 .nl-hd {
-    padding:16px 22px 14px; border-bottom:1px solid ${hd.border};
+    padding:16px 20px 14px; border-bottom:1px solid ${hd.border};
     display:flex; flex-direction:column; gap:12px; flex-shrink:0;
     background:linear-gradient(90deg,${hd.accent}05 0%,transparent 60%);
 }
 .nl-hd-top { display:flex; gap:12px; align-items:center; }
 .nl-sr {
     flex:1; background:${hd.bg2}; border:1px solid ${hd.border};
-    color:${hd.text}; padding:10px 16px;
-    font-family:'Rajdhani',sans-serif; font-size:14px; outline:none; transition:border-color .15s;
+    color:${hd.text}; padding:10px 14px;
+    font-family:var(--nl-font); font-size:14px; outline:none; transition:border-color .15s;
     clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);
 }
 .nl-sr:focus { border-color:${hd.accent}; box-shadow:0 0 0 1px ${hd.accent}20; }
@@ -1160,18 +967,18 @@
 .nl-cl:hover { background:rgba(239,68,68,.15); border-color:#ef4444; color:#ef4444; }
 
 /* ── Панель префиксов ── */
-.nl-pb { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.nl-pb { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 .nl-pp {
-    font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+    font-family:var(--nl-font); font-size:11px; font-weight:700;
     text-transform:uppercase; letter-spacing:.5px;
-    padding:4px 11px; border:1px solid; cursor:pointer;
+    padding:5px 12px; border:1px solid; cursor:pointer;
     transition:all .15s; background:transparent;
     clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,6px 100%,0 calc(100% - 6px));
 }
 .nl-pp:hover { filter:brightness(1.2); transform:translateY(-1px); }
 
 /* ── Контент ── */
-.nl-ct { flex:1; overflow-y:auto; padding:18px 22px; }
+.nl-ct { flex:1; overflow-y:auto; padding:16px 20px; }
 .nl-ct::-webkit-scrollbar { width:4px; }
 .nl-ct::-webkit-scrollbar-thumb { background:${hd.border}; }
 
@@ -1183,39 +990,39 @@
     background:${hd.bg2}; border:1px solid ${hd.border};
     border-left:2px solid transparent;
     clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
-    padding:16px; cursor:pointer; transition:all .18s; position:relative; overflow:hidden;
+    padding:16px; cursor:pointer; transition:all .15s; position:relative; overflow:hidden;
     box-sizing:border-box;
 }
 .nl-card:hover { border-left-color:${hd.accent}; box-shadow:0 4px 20px rgba(0,0,0,.3); transform:translateY(-1px); }
 .nl-card.pinned { border-left-color:${hd.accent}; background:${hd.accent}06; }
 .nl-card h3 {
-    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px; letter-spacing:.04em;
-    color:${hd.text}; margin:0 0 7px; padding-right:22px; line-height:1.3;
+    font-family:var(--nl-font); font-weight:700; font-size:14px; letter-spacing:.05em;
+    color:${hd.text}; margin:0 0 8px; padding-right:22px; line-height:1.3;
     text-transform:uppercase;
 }
 .nl-card-preview {
-    font-family:'Rajdhani',sans-serif; font-size:12px; color:${hd.text2}; margin:0 0 12px; line-height:1.5;
+    font-family:var(--nl-font); font-size:12px; color:${hd.text2}; margin:0 0 12px; line-height:1.5;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 .nl-badge {
     display:inline-block; font-size:10px; padding:2px 9px;
-    font-family:'Rajdhani',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+    font-family:var(--nl-font); font-weight:700; text-transform:uppercase; letter-spacing:.5px;
     clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,5px 100%,0 calc(100% - 5px));
 }
 .nl-new {
-    display:inline-block; font-size:9px; font-weight:700; font-family:'Rajdhani',sans-serif;
+    display:inline-block; font-size:10px; font-weight:700; font-family:var(--nl-font);
     padding:1px 7px; background:rgba(34,197,94,.15); color:#22c55e;
     margin-left:6px; vertical-align:middle; text-transform:uppercase; letter-spacing:.5px;
 }
-.nl-uses { position:absolute; bottom:12px; right:14px; font-family:'Share Tech Mono',monospace; font-size:10px; color:${hd.text2}; }
-.nl-pin-star { position:absolute; top:12px; right:14px; color:${hd.accent}; font-size:12px; }
+.nl-uses { position:absolute; bottom:14px; right:16px; font-family:'Share Tech Mono',monospace; font-size:10px; color:${hd.text2}; }
+.nl-pin-star { position:absolute; top:14px; right:16px; color:${hd.accent}; font-size:12px; }
 
 /* Tooltip */
 .nl-tooltip {
     position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%);
     background:${hd.bg3}; border:1px solid ${hd.border};
     clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
-    padding:10px 13px; font-family:'Rajdhani',sans-serif; font-size:12px; color:${hd.text}; line-height:1.6;
+    padding:10px 13px; font-family:var(--nl-font); font-size:12px; color:${hd.text}; line-height:1.6;
     width:280px; z-index:99999; pointer-events:none;
     box-shadow:0 8px 24px rgba(0,0,0,.7);
     white-space:pre-wrap; word-break:break-word;
@@ -1224,7 +1031,7 @@
 .nl-card:hover .nl-tooltip { opacity:1; }
 
 /* Overlay редактирования */
-.nl-mo { position:absolute; inset:0; background:rgba(8,6,4,.92); display:none; align-items:center; justify-content:center; gap:10px; }
+.nl-mo { position:absolute; inset:0; background:${hd.overlay || 'rgba(8,6,4,.92)'}; display:none; align-items:center; justify-content:center; gap:10px; }
 .nl-card.em .nl-mo { display:flex; }
 .nl-card.em { cursor:default; }
 .nl-card.em:hover { transform:none; box-shadow:none; }
@@ -1241,26 +1048,26 @@
 /* ── Футер ── */
 .nl-ft {
     display:flex; align-items:center; justify-content:space-between;
-    padding:12px 22px; background:${hd.bg2}; border-top:1px solid ${hd.border};
+    padding:12px 20px; background:${hd.bg2}; border-top:1px solid ${hd.border};
     flex-shrink:0; flex-wrap:wrap; gap:10px;
 }
-.nl-fl { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-.nl-cl2 { display:flex; align-items:center; gap:7px; font-family:'Rajdhani',sans-serif; font-size:13px; color:${hd.text2}; cursor:pointer; font-weight:600; user-select:none; letter-spacing:.04em; }
+.nl-fl { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.nl-cl2 { display:flex; align-items:center; gap:7px; font-family:var(--nl-font); font-size:13px; color:${hd.text2}; cursor:pointer; font-weight:600; user-select:none; letter-spacing:.05em; }
 .nl-cl2 input { accent-color:${hd.accent}; width:14px; height:14px; cursor:pointer; }
 .nl-sep { width:1px; height:18px; background:${hd.border}; }
-.nl-sin { background:${hd.bg3}; border:1px solid ${hd.border}; color:${hd.text}; padding:7px 12px; font-family:'Rajdhani',sans-serif; font-size:13px; width:110px; outline:none; transition:border-color .15s; clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%); }
+.nl-sin { background:${hd.bg3}; border:1px solid ${hd.border}; color:${hd.text}; padding:8px 12px; font-family:var(--nl-font); font-size:13px; width:110px; outline:none; transition:border-color .15s; clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%); }
 .nl-sin:focus { border-color:${hd.accent}; }
 .nl-sin::placeholder { color:${hd.text2}; }
 
 /* ── Кнопки ── */
 .nl-btn {
-    padding:8px 16px; border:none;
-    font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:700;
+    padding:9px 16px; border:none;
+    font-family:var(--nl-font); font-size:12px; font-weight:700;
     text-transform:uppercase; letter-spacing:.5px; cursor:pointer; transition:all .15s;
     clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
 }
-.nl-btn-sm { padding:6px 12px; font-size:11px; }
-.nl-bp { background:${hd.accent}; color:#000; border:1px solid ${hd.accent}; }
+.nl-btn-sm { padding:7px 12px; font-size:11px; }
+.nl-bp { background:${hd.accent}; color:${btnOn}; border:1px solid ${hd.accent}; }
 .nl-bp:hover { filter:brightness(1.1); box-shadow:0 0 16px ${hd.accent}50; }
 .nl-bd { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); color:#ef4444; }
 .nl-bd:hover { background:rgba(239,68,68,.2); }
@@ -1271,52 +1078,52 @@
 .nl-fr { display:flex; gap:8px; }
 
 /* ── Пустое состояние ── */
-.nl-empty { text-align:center; padding:54px 20px; color:${hd.text2}; font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.nl-empty { text-align:center; padding:54px 20px; color:${hd.text2}; font-family:var(--nl-font); font-size:14px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
 .nl-empty-icon { font-size:40px; margin-bottom:12px; opacity:.4; }
 .nl-fa { opacity:.5 !important; pointer-events:none !important; }
 
 /* ── Диалоги ── */
-.nl-dov { position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,.85); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; font-family:'Rajdhani',sans-serif; animation:nl-fade .15s ease; }
-.nl-dbox { background:${hd.bg}; border:1px solid ${hd.border}; clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px)); padding:24px; width:560px; max-width:94vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 50px rgba(0,0,0,.8); display:flex; flex-direction:column; gap:14px; animation:nl-up .18s ease; }
-.nl-dt { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:17px; letter-spacing:.06em; text-transform:uppercase; color:${hd.text}; border-bottom:1px solid ${hd.border}; padding-bottom:12px; }
+.nl-dov { position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,.85); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; font-family:var(--nl-font); animation:nl-fade .15s ease; }
+.nl-dbox { background:${hd.bg}; border:1px solid ${hd.border}; clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px)); padding:24px; width:560px; max-width:94vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 50px rgba(0,0,0,.8); display:flex; flex-direction:column; gap:16px; animation:nl-up .18s ease; }
+.nl-dt { font-family:var(--nl-font); font-weight:700; font-size:16px; letter-spacing:.05em; text-transform:uppercase; color:${hd.text}; border-bottom:1px solid ${hd.border}; padding-bottom:12px; }
 .nl-f  { display:flex; flex-direction:column; gap:6px; }
-.nl-f label { font-family:'Rajdhani',sans-serif; font-size:11px; color:${hd.text2}; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
-.nl-ph-hint { font-size:11px; color:${hd.text2}; line-height:1.8; font-family:'Rajdhani',sans-serif; }
-.nl-ph-hint code { background:${hd.bg3}; padding:1px 6px; color:${hd.accent}; font-size:10.5px; font-family:'Share Tech Mono',monospace; }
-.nl-in, .nl-sel, .nl-ta { background:${hd.bg2}; border:1px solid ${hd.border}; color:${hd.text}; padding:10px 14px; font-family:'Rajdhani',sans-serif; font-size:14px; outline:none; transition:border-color .15s; width:100%; box-sizing:border-box; }
-.nl-in:focus, .nl-sel:focus, .nl-ta:focus { border-color:${hd.accent}; box-shadow:0 0 0 1px ${hd.accent}18; }
+.nl-f label { font-family:var(--nl-font); font-size:11px; color:${hd.text2}; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+.nl-ph-hint { font-size:11px; color:${hd.text2}; line-height:1.8; font-family:var(--nl-font); }
+.nl-ph-hint code { background:${hd.bg3}; padding:1px 6px; color:${hd.accent}; font-size:11px; font-family:'Share Tech Mono',monospace; }
+.nl-in, .nl-sel, .nl-ta { background:${hd.bg2}; border:1px solid ${hd.border}; color:${hd.text}; padding:10px 14px; font-family:var(--nl-font); font-size:14px; outline:none; transition:border-color .15s; width:100%; box-sizing:border-box; }
+.nl-in:focus, .nl-sel:focus, .nl-ta:focus { border-color:${hd.accent}; box-shadow:0 0 0 1px ${hd.accent}20; }
 .nl-ta { resize:vertical; min-height:120px; line-height:1.6; }
 .nl-sel option { background:${hd.bg2}; }
-.nl-da { display:flex; gap:10px; justify-content:flex-end; margin-top:4px; }
+.nl-da { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
 
 /* Вкладки в диалоге */
 .nl-dtabs { display:flex; gap:2px; border-bottom:1px solid ${hd.border}; margin-bottom:2px; }
-.nl-dtab { padding:9px 16px; background:none; border:none; border-bottom:2px solid transparent; color:${hd.text2}; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; cursor:pointer; transition:all .15s; margin-bottom:-1px; }
+.nl-dtab { padding:10px 16px; background:none; border:none; border-bottom:2px solid transparent; color:${hd.text2}; font-family:var(--nl-font); font-size:13px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:all .15s; margin-bottom:-1px; }
 .nl-dtab:hover { color:${hd.text}; }
 .nl-dtab.active { color:${hd.accent}; border-bottom-color:${hd.accent}; }
 .nl-dpanel { display:none; flex-direction:column; gap:13px; }
 .nl-dpanel.active { display:flex; }
 
 /* ── Выбор темы ── */
-.nl-hov { position:fixed; inset:0; z-index:999998; background:rgba(0,0,0,.82); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; font-family:'Rajdhani',sans-serif; }
+.nl-hov { position:fixed; inset:0; z-index:999998; background:rgba(0,0,0,.82); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; font-family:var(--nl-font); }
 .nl-hbox { background:${hd.bg}; border:1px solid ${hd.border}; clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px)); padding:22px; width:360px; box-shadow:0 16px 50px rgba(0,0,0,.8); }
-.nl-htitle { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px; letter-spacing:.08em; text-transform:uppercase; color:${hd.text}; margin-bottom:16px; text-align:center; }
+.nl-htitle { font-family:var(--nl-font); font-weight:700; font-size:16px; letter-spacing:.08em; text-transform:uppercase; color:${hd.text}; margin-bottom:16px; text-align:center; }
 .nl-hgrid { display:flex; flex-direction:column; gap:8px; }
-.nl-hi { display:flex; align-items:center; gap:12px; padding:11px 16px; border:1px solid ${hd.border}; cursor:pointer; transition:all .18s; background:${hd.bg2}; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)); }
+.nl-hi { display:flex; align-items:center; gap:12px; padding:11px 16px; border:1px solid ${hd.border}; cursor:pointer; transition:all .15s; background:${hd.bg2}; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)); }
 .nl-hi:hover { border-color:var(--th-a); transform:translateX(3px); }
 .nl-hi.active { border-color:var(--th-a); background:var(--th-a)0d; }
 .nl-hs { width:26px; height:26px; flex-shrink:0; clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%); }
-.nl-hn { font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700; letter-spacing:.04em; color:${hd.text}; }
-.nl-hclose { margin-top:14px; width:100%; padding:10px; border:1px solid ${hd.border}; background:${hd.bg2}; color:${hd.text2}; cursor:pointer; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; transition:all .15s; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)); }
+.nl-hn { font-family:var(--nl-font); font-size:14px; font-weight:700; letter-spacing:.05em; color:${hd.text}; }
+.nl-hclose { margin-top:14px; width:100%; padding:10px; border:1px solid ${hd.border}; background:${hd.bg2}; color:${hd.text2}; cursor:pointer; font-family:var(--nl-font); font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; transition:all .15s; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)); }
 .nl-hclose:hover { color:${hd.text}; border-color:${hd.accent}; }
 
 /* ── Статистика / История / Настройки ── */
 .nl-stat-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:${hd.bg2}; border:1px solid ${hd.border}; border-left:2px solid ${hd.accent}40; }
-.nl-stat-title { color:${hd.text}; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; letter-spacing:.04em; }
+.nl-stat-title { color:${hd.text}; font-family:var(--nl-font); font-size:13px; font-weight:600; letter-spacing:.05em; }
 .nl-stat-val { font-weight:700; font-family:'Share Tech Mono',monospace; font-size:14px; }
 .nl-stat-val.ok   { color:#22c55e; } .nl-stat-val.warn { color:#f59e0b; } .nl-stat-val.err  { color:#ef4444; }
-.nl-stat-details  { font-size:11.5px; color:${hd.text2}; margin-top:5px; line-height:1.55; font-family:'Rajdhani',sans-serif; }
-.nl-stat-section  { font-family:'Rajdhani',sans-serif; font-size:11px; color:${hd.accent}; letter-spacing:1.2px; text-transform:uppercase; margin:12px 0 6px; font-weight:700; }
+.nl-stat-details  { font-size:11px; color:${hd.text2}; margin-top:5px; line-height:1.55; font-family:var(--nl-font); }
+.nl-stat-section  { font-family:var(--nl-font); font-size:11px; color:${hd.accent}; letter-spacing:1.2px; text-transform:uppercase; margin:12px 0 6px; font-weight:700; }
 .nl-stat-grid     { display:flex; flex-direction:column; gap:6px; }
 .nl-bar-wrap      { display:flex; align-items:center; gap:9px; }
 .nl-bar           { flex:1; height:4px; background:${hd.border}; overflow:hidden; }
@@ -1325,26 +1132,210 @@
 .nl-hist-item:hover { border-left-color:${hd.accent}; }
 .nl-hist-dot  { width:8px; height:8px; flex-shrink:0; margin-top:4px; }
 .nl-hist-body { flex:1; min-width:0; }
-.nl-hist-tpl  { font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:${hd.text}; }
-.nl-hist-thread { font-size:12px; color:${hd.text2}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Rajdhani',sans-serif; }
+.nl-hist-tpl  { font-family:var(--nl-font); font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:${hd.text}; }
+.nl-hist-thread { font-size:12px; color:${hd.text2}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--nl-font); }
 .nl-hist-time { font-size:11px; color:${hd.text2}; flex-shrink:0; font-family:'Share Tech Mono',monospace; }
-.nl-set-row { display:flex; justify-content:space-between; align-items:center; padding:11px 14px; background:${hd.bg2}; border:1px solid ${hd.border}; }
-.nl-set-label { font-family:'Rajdhani',sans-serif; font-size:13px; color:${hd.text}; font-weight:700; letter-spacing:.04em; }
-.nl-set-desc  { font-size:11px; color:${hd.text2}; margin-top:2px; font-family:'Rajdhani',sans-serif; }
+.nl-set-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:${hd.bg2}; border:1px solid ${hd.border}; }
+.nl-set-label { font-family:var(--nl-font); font-size:13px; color:${hd.text}; font-weight:700; letter-spacing:.05em; }
+.nl-set-desc  { font-size:11px; color:${hd.text2}; margin-top:2px; font-family:var(--nl-font); }
 .nl-tag-list  { display:flex; flex-wrap:wrap; gap:6px; }
 .nl-tag { display:flex; align-items:center; gap:5px; background:${hd.bg3}; border:1px solid ${hd.border}; padding:4px 12px; font-family:'Share Tech Mono',monospace; font-size:11px; color:${hd.text2}; }
 .nl-tag button { background:none; border:none; color:${hd.text2}; cursor:pointer; font-size:14px; line-height:1; padding:0; }
 .nl-tag button:hover { color:#ef4444; }
-.nl-verdict { text-align:center; padding:10px 16px; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:.4px; clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px)); }
+.nl-verdict { text-align:center; padding:10px 16px; font-family:var(--nl-font); font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:.4px; clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px)); }
+
+/* ── Конструктор нарушений ── */
+.nl-rb-group { font-family:var(--nl-font); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${hd.text2}; padding:8px 2px 2px; }
+.nl-rb-row { display:flex; align-items:flex-start; gap:8px; padding:8px 12px; background:${hd.bg2}; border:1px solid ${hd.border}; cursor:pointer; font-family:var(--nl-font); font-size:12px; color:${hd.text}; }
+.nl-rb-row:hover { border-color:${hd.accent}44; }
+.nl-rb-row input { margin-top:2px; flex-shrink:0; accent-color:${hd.accent}; }
+.nl-rb-row b { color:${hd.accent}; font-family:'Share Tech Mono',monospace; }
+.nl-rb-pen { color:${hd.text2}; opacity:.85; }
+
+/* ── Мастер решений ── */
+.nl-wiz-steps { display:flex; gap:6px; }
+.nl-wiz-step {
+    flex:1; text-align:center; padding:7px 4px;
+    font-family:var(--nl-font); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:${hd.text2}; border:1px solid ${hd.border}; background:${hd.bg2};
+    clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px));
+}
+.nl-wiz-step.active { color:${hd.accent}; border-color:${hd.accent}66; background:${hd.accent}0d; }
+.nl-wiz-step.done   { color:${hd.text}; }
+.nl-wiz-excerpt {
+    font-size:12px; color:${hd.text2}; background:${hd.bg3}; border:1px solid ${hd.border};
+    padding:12px 14px; max-height:140px; overflow-y:auto; line-height:1.55; font-family:var(--nl-font);
+}
+.nl-wiz-verdict {
+    display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px;
+    border:1px solid; font-family:var(--nl-font); font-size:13px; font-weight:700; letter-spacing:.03em;
+    flex-wrap:wrap;
+}
+.nl-wiz-cat { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.nl-wiz-cat button {
+    display:flex; flex-direction:column; gap:4px; align-items:flex-start; padding:14px 16px;
+    background:${hd.bg2}; border:1px solid ${hd.border}; color:${hd.text}; cursor:pointer;
+    font-family:var(--nl-font); text-align:left; transition:all .15s;
+    clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
+}
+.nl-wiz-cat button:hover { border-color:${hd.accent}; background:${hd.accent}0d; }
+.nl-wiz-cat .t { font-size:15px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.nl-wiz-cat .d { font-size:11px; color:${hd.text2}; }
+.nl-wiz-match {
+    display:inline-block; font-size:10px; font-weight:700; font-family:var(--nl-font);
+    padding:1px 7px; background:${hd.accent}22; color:${hd.accent};
+    text-transform:uppercase; letter-spacing:.5px; margin-left:6px; white-space:nowrap;
+}
+.nl-wiz-tplrow {
+    display:flex; flex-direction:column; gap:3px; padding:10px 14px;
+    background:${hd.bg2}; border:1px solid ${hd.border}; border-left:2px solid transparent;
+    cursor:pointer; transition:all .15s;
+}
+.nl-wiz-tplrow:hover { border-left-color:${hd.accent}; background:${hd.accent}08; }
+.nl-wiz-quick {
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 12px;
+    background:#ffa50210; border:1px solid #ffa50240;
+    font-family:var(--nl-font); font-size:12px; color:#ffa502; font-weight:600;
+}
+
+/* ── Клавиатурная навигация по карточкам ── */
+.nl-card.nl-card-active { border-left-color:${hd.accent}; box-shadow:0 0 0 1px ${hd.accent}, 0 4px 20px rgba(0,0,0,.3); }
+
+/* ── Тег происхождения (глобальный поиск) ── */
+.nl-badge-tab { background:${hd.bg3}; color:${hd.text2}; border:1px solid ${hd.border}; }
 
 /* ── Нотификация ── */
 .nl-notif {
     position:fixed; top:20px; right:20px; padding:10px 18px;
-    font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700;
+    font-family:var(--nl-font); font-size:13px; font-weight:700;
     letter-spacing:.08em; text-transform:uppercase; z-index:200000;
     clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
     animation:nl-up .2s ease;
 }
+
+/* ── Профиль куратора ── */
+.nl-prof-head { display:flex; gap:16px; align-items:center; }
+.nl-prof-lvl {
+    width:74px; height:74px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:${hd.accent}10; border:1px solid ${hd.accent}55; color:${hd.accent};
+    font-family:var(--nl-font); font-size:30px; font-weight:700; line-height:1;
+    clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+}
+.nl-prof-lvl span { font-size:10px; letter-spacing:2px; color:${hd.text2}; margin-bottom:3px; }
+.nl-prof-ach { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.nl-prof-a {
+    display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 4px 8px;
+    background:${hd.bg2}; border:1px solid ${hd.border}; text-align:center; opacity:.35; filter:grayscale(1);
+    clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+}
+.nl-prof-a.on { opacity:1; filter:none; border-color:${hd.accent}44; background:${hd.accent}08; }
+.nl-prof-a .i { font-size:22px; }
+.nl-prof-a .n { font-family:var(--nl-font); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:${hd.text}; line-height:1.2; }
+.nl-prof-a .d { font-family:'Share Tech Mono',monospace; font-size:10px; color:${hd.text2}; }
+
+/* ── Командная строка (Alt+K) ── */
+.nl-cmd-ov {
+    position:fixed; inset:0; z-index:999999;
+    background:rgba(0,0,0,.6); backdrop-filter:blur(3px);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding-top:14vh; font-family:var(--nl-font); animation:nl-fade .12s ease;
+}
+.nl-cmd-box {
+    width:560px; max-width:94vw; background:${hd.bg}; border:1px solid ${hd.accent}55;
+    clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));
+    box-shadow:0 0 0 1px ${hd.accent}15, 0 24px 60px rgba(0,0,0,.85);
+    display:flex; flex-direction:column; animation:nl-up .15s ease;
+}
+.nl-cmd-in {
+    background:${hd.bg2}; border:none; border-bottom:1px solid ${hd.border};
+    color:${hd.text}; padding:14px 18px; font-family:'Share Tech Mono',monospace; font-size:15px; outline:none;
+}
+.nl-cmd-in::placeholder { color:${hd.text2}; font-size:13px; }
+.nl-cmd-list { max-height:320px; overflow-y:auto; display:flex; flex-direction:column; }
+.nl-cmd-list::-webkit-scrollbar { width:4px; }
+.nl-cmd-list::-webkit-scrollbar-thumb { background:${hd.border}; }
+.nl-cmd-item {
+    display:flex; align-items:center; gap:11px; padding:9px 16px; cursor:pointer;
+    font-size:13px; color:${hd.text}; border-left:2px solid transparent;
+}
+.nl-cmd-item.active, .nl-cmd-item:hover { background:${hd.accent}0d; border-left-color:${hd.accent}; }
+.nl-cmd-ico { width:20px; text-align:center; flex-shrink:0; }
+.nl-cmd-lbl { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; letter-spacing:.02em; }
+.nl-cmd-tag { font-family:'Share Tech Mono',monospace; font-size:10px; color:${hd.text2}; flex-shrink:0; text-transform:uppercase; }
+.nl-cmd-empty { padding:18px; text-align:center; color:${hd.text2}; font-size:13px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.nl-cmd-hint { padding:8px 16px; border-top:1px solid ${hd.border}; font-family:'Share Tech Mono',monospace; font-size:10px; color:${hd.text2}; letter-spacing:.5px; }
+
+/* ── Док-панель (режим «сбоку»): та же разметка, другой контейнер ── */
+@keyframes nl-dock-in { from{transform:translateX(40px);opacity:0} to{transform:none;opacity:1} }
+.nl-ov.nl-dock {
+    inset:0 0 0 auto; width:min(440px,100vw);
+    background:none; backdrop-filter:none;
+    display:block; animation:none;
+}
+.nl-dock .nl-m {
+    width:100%; height:100%; max-width:none; max-height:none;
+    flex-direction:column; clip-path:none;
+    border:none; border-left:1px solid ${hd.border};
+    box-shadow:-16px 0 44px rgba(0,0,0,.65);
+    animation:nl-dock-in .2s ease;
+}
+.nl-dock .nl-sidebar { width:100%; border-right:none; border-bottom:1px solid ${hd.border}; flex-shrink:0; }
+.nl-dock .nl-logo-area { padding:10px 16px 8px; display:flex; align-items:baseline; gap:10px; }
+.nl-dock .nl-logo-text { font-size:18px; }
+.nl-dock .nl-tabs { flex:none; flex-direction:row; overflow-x:auto; overflow-y:hidden; padding:0 8px; gap:0; }
+.nl-dock .nl-tabs::-webkit-scrollbar { height:3px; }
+.nl-dock .nl-tab { padding:9px 10px; border-left:none; border-bottom:2px solid transparent; white-space:nowrap; font-size:12px; }
+.nl-dock .nl-tab.active { border-bottom-color:${hd.accent}; background:none; }
+.nl-dock .nl-sb-foot { flex-direction:row; flex-wrap:wrap; padding:8px; gap:4px; }
+.nl-dock .nl-hb { width:auto; flex:1 1 45%; padding:7px 6px; font-size:11px; text-align:center; }
+.nl-dock .nl-hd { padding:10px 12px 9px; }
+.nl-dock .nl-ct { padding:12px; }
+.nl-dock .nl-grid { grid-template-columns:1fr; }
+.nl-dock .nl-ft { padding:10px 12px; gap:8px; }
+${hd.dbh ? `
+/* ── Detroit: Become Human — фирменный декор CyberLife ── */
+/* LED-индикатор андроида в углу логотипа */
+@keyframes nl-led { 0%,100% { box-shadow:0 0 0 0 ${hd.accent}55; } 50% { box-shadow:0 0 0 7px transparent; } }
+.nl-logo-area::before {
+    content:''; position:absolute; top:22px; right:18px; width:12px; height:12px; border-radius:50%;
+    border:2px solid ${hd.accent};
+    background:radial-gradient(circle, ${hd.accent} 0 42%, transparent 50%);
+    animation:nl-led 2.4s ease-in-out infinite;
+}
+.nl-dock .nl-logo-area::before { top:14px; }
+.nl-logo-text { font-family:var(--nl-font-title); font-size:22px; letter-spacing:4px; }
+.nl-dock .nl-logo-text { font-size:16px; }
+.nl-dt, .nl-htitle { font-family:var(--nl-font-title); font-size:14px; letter-spacing:2.5px; font-weight:400; }
+/* плоские углы вместо срезов + сканирующая линия по окну */
+.nl-m, .nl-dbox, .nl-cmd-box, .nl-hbox, .nl-card, .nl-btn, .nl-hb, .nl-notif, .nl-verdict, .nl-badge, .nl-sr, .nl-cl, .nl-sin, .nl-ib, .nl-hi, .nl-hs, .nl-hclose, .nl-hist-item, .nl-wiz-step, .nl-wiz-cat button, .nl-prof-lvl, .nl-prof-a { clip-path:none; }
+.nl-m { position:relative; }
+.nl-m::before {
+    content:''; position:absolute; left:0; right:0; top:0; height:1px; z-index:9; pointer-events:none;
+    background:linear-gradient(90deg,transparent,${hd.accent},transparent); opacity:.5;
+    animation:nl-dbh-scan 6s linear infinite;
+}
+@keyframes nl-dbh-scan { from { top:0; } to { top:100%; } }
+/* уголки-скобки на карточках — рамка анализа улик */
+.nl-card::before, .nl-card::after {
+    content:''; position:absolute; width:12px; height:12px; border:0 solid ${hd.accent};
+    transition:all .15s; pointer-events:none; opacity:.85;
+}
+.nl-card::before { top:-1px; left:-1px; border-top-width:2px; border-left-width:2px; }
+.nl-card::after  { bottom:-1px; right:-1px; border-bottom-width:2px; border-right-width:2px; }
+.nl-card:hover::before, .nl-card:hover::after { width:24px; height:24px; }
+/* скошенные кнопки-«реплики», как варианты диалога */
+.nl-btn { clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%); padding-left:22px; padding-right:22px; }
+.nl-btn-sm { padding-left:18px; padding-right:18px; }
+.nl-pp { clip-path:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%); padding-left:16px; padding-right:16px; }
+/* «девиантный» глитч — включается командой rA9 */
+@keyframes nl-glitch {
+    0%   { text-shadow:2px 0 rgba(229,66,79,.65), -2px 0 ${hd.accent}aa; }
+    49%  { text-shadow:2px 0 rgba(229,66,79,.65), -2px 0 ${hd.accent}aa; }
+    50%  { text-shadow:-2px 0 rgba(229,66,79,.65), 2px 0 ${hd.accent}aa; transform:translateX(1px); }
+    100% { text-shadow:-2px 0 rgba(229,66,79,.65), 2px 0 ${hd.accent}aa; }
+}
+body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .nl-btn-main { animation:nl-glitch .28s steps(2) infinite; }
+` : ''}
         `;
     }
 
@@ -1355,28 +1346,32 @@
         document.head.appendChild(styleEl);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ГЛАВНОЕ ОКНО
-    // ═══════════════════════════════════════════════════════════════
+    // ГЛАВНОЕ ОКНО
+    // открывает помощник: модальное окно или док-панель сбоку — по SETS.uiMode;
+    // внутренняя разметка и вся логика (renderCards/bindMain) общие, различается только контейнер
     function openMain() {
         if (document.querySelector('.nl-ov')) return;
-        document.body.style.overflow = 'hidden';
+        const dock = SETS.uiMode === 'dock';
+        if (!dock) document.body.style.overflow = 'hidden';
 
         const ov = document.createElement('div');
-        ov.className = 'nl-ov';
+        ov.className = 'nl-ov' + (dock ? ' nl-dock' : '');
         ov.innerHTML = `
             <div class="nl-m">
                 <aside class="nl-sidebar">
                     <div class="nl-logo-area">
                         <div class="nl-logo-text">NL<span>.</span></div>
-                        <div class="nl-logo-sub">Helper v5.0 · Alt+H</div>
+                        <div class="nl-logo-sub">${theme().dbh ? 'NL800 · № 582 289 006 — 62' : 'Helper v6.2 · Alt+H'}</div>
                     </div>
                     <nav class="nl-tabs">
                         ${TABS.map(t=>`<button class="nl-tab${t.id===curTab?' active':''}" data-tab="${t.id}">${t.name}</button>`).join('')}
                     </nav>
                     <div class="nl-sb-foot">
-                        <button class="nl-hb" id="nl-hud">🎨 Тема</button>
+                        <button class="nl-hb" id="nl-wizard-sb">🧙 Мастер решений</button>
+                        <button class="nl-hb" id="nl-rulebuilder-btn">⚖ Конструктор</button>
                         <button class="nl-hb" id="nl-history-btn">🕐 История</button>
+                        <button class="nl-hb" id="nl-profile-btn">🏅 Профиль</button>
+                        <button class="nl-hb" id="nl-hud">🎨 Тема</button>
                         <button class="nl-hb" id="nl-settings-btn">⚙️ Настройки</button>
                     </div>
                 </aside>
@@ -1385,7 +1380,8 @@
                     <header class="nl-hd">
                         <div class="nl-hd-top">
                             <input type="text" class="nl-sr" placeholder="🔍 Поиск шаблонов (EN→RU)...">
-                            <div class="nl-cl" title="Закрыть (Esc)">✕</div>
+                            <div class="nl-cl" id="nl-mode-toggle" title="${dock?'Развернуть в окно':'Свернуть в панель сбоку'}">⇄</div>
+                            <div class="nl-cl" id="nl-close" title="Закрыть (Esc)">✕</div>
                         </div>
                         <div class="nl-pb">
                             ${Object.entries(PREFIX_NAMES).filter(([i])=>i!=0).map(([i,n])=>
@@ -1426,8 +1422,14 @@
     }
 
     function bindMain(ov) {
-        ov.querySelector('.nl-cl').onclick = closeMain;
-        ov.onclick = e => { if (e.target===ov) closeMain(); };
+        ov.querySelector('#nl-close').onclick = closeMain;
+        ov.querySelector('#nl-mode-toggle').onclick = () => {
+            SETS.uiMode = SETS.uiMode === 'dock' ? 'modal' : 'dock';
+            saveSettings();
+            closeMain(); openMain();
+        };
+        // клик по подложке закрывает только модальное окно; у док-панели подложки нет
+        ov.onclick = e => { if (e.target===ov && SETS.uiMode!=='dock') closeMain(); };
 
         ov.querySelectorAll('.nl-tab').forEach(t => {
             t.onclick = () => {
@@ -1440,6 +1442,12 @@
         });
 
         ov.querySelector('.nl-sr').oninput = e => renderCards(e.target.value);
+        ov.querySelector('.nl-sr').onkeydown = e => {
+            if (manageMode) return;
+            if (e.key==='ArrowDown') { e.preventDefault(); moveCardSelection(1); }
+            else if (e.key==='ArrowUp') { e.preventDefault(); moveCardSelection(-1); }
+            else if (e.key==='Enter') { e.preventDefault(); document.querySelector('.nl-card-active')?.click(); }
+        };
         ov.querySelector('#nl-srv').oninput = e => { SETS.serverName=e.target.value.trim(); saveSettings(); };
         ov.querySelectorAll('.nl-pp').forEach(b => {
             b.onclick = () => { if(!manageMode){ closeMain(); setPrefix(parseInt(b.dataset.p)); } };
@@ -1453,6 +1461,9 @@
         ov.querySelector('#nl-hud').onclick         = openThemePicker;
         ov.querySelector('#nl-settings-btn').onclick = openSettings;
         ov.querySelector('#nl-history-btn').onclick  = openHistory;
+        ov.querySelector('#nl-rulebuilder-btn').onclick = openRuleBuilder;
+        ov.querySelector('#nl-profile-btn').onclick = openProfile;
+        ov.querySelector('#nl-wizard-sb').onclick   = () => { closeMain(); openWizard(); };
         ov.querySelector('#nl-cr').onclick = createDialog;
         ov.querySelector('#nl-mg').onclick = () => {
             manageMode = !manageMode;
@@ -1485,13 +1496,24 @@
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  РЕНДЕР КАРТОЧЕК
-    // ═══════════════════════════════════════════════════════════════
+    // двигает клавиатурное выделение по видимым карточкам (стрелки в поле поиска)
+    function moveCardSelection(delta) {
+        const cards = [...document.querySelectorAll('.nl-grid .nl-card')];
+        if (!cards.length) return;
+        let idx = cards.findIndex(c => c.classList.contains('nl-card-active'));
+        cards.forEach(c => c.classList.remove('nl-card-active'));
+        idx = idx < 0 ? (delta > 0 ? 0 : cards.length - 1) : Math.max(0, Math.min(cards.length - 1, idx + delta));
+        cards[idx].classList.add('nl-card-active');
+        cards[idx].scrollIntoView({ block: 'nearest' });
+    }
+
+    // РЕНДЕР КАРТОЧЕК
     function renderCards(filter='') {
         const grid = document.querySelector('.nl-grid'); if(!grid) return;
         grid.innerHTML = '';
         let items = [];
+
+        const originTab = {}; // id -> tabId, только заполняется при глобальном поиске (для бейджа раздела)
 
         if (curTab==='recent') {
             const seen=new Set();
@@ -1502,8 +1524,8 @@
                 if (found) items.push(found);
             }
         } else if (filter) {
-            Object.values(TPLS).forEach(arr=>items.push(...arr));
-            items=items.filter(t=>fuzz(filter,t.title)||fuzz(filter,t.content));
+            Object.entries(TPLS).forEach(([tabId,arr])=>arr.forEach(t=>{ items.push(t); originTab[t.id]=tabId; }));
+            items=items.filter(t=>fuzz(filter,t.title)||fuzz(filter,t.tags||'')||fuzz(filter,t.content));
         } else {
             items=[...(TPLS[curTab]||[])];
         }
@@ -1529,11 +1551,13 @@
             const c = document.createElement('div');
             c.className = `nl-card${tpl.isPinned?' pinned':''}${manageMode?' em':''}`;
             const titleDisplay = tpl.title.length > 35 ? tpl.title.substring(0, 35) + '…' : tpl.title;
+            const originName = filter && originTab[tpl.id] ? TABS.find(t=>t.id===originTab[tpl.id])?.name : null;
             c.innerHTML = `
                 ${tpl.isPinned ? '<div class="nl-pin-star">★</div>' : ''}
                 <h3 title="${esc(tpl.title)}">${esc(titleDisplay)}${tpl.isNew?'<span class="nl-new">NEW</span>':''}</h3>
                 <div class="nl-card-preview">${esc(preview)}…</div>
                 <span class="nl-badge" style="background:${pc}12;color:${pc};border:1px solid ${pc}30">${pn}</span>
+                ${originName?`<span class="nl-badge nl-badge-tab">${esc(originName)}</span>`:''}
                 ${tpl.uses?`<span class="nl-uses">×${tpl.uses}</span>`:''}
                 <div class="nl-tooltip">${esc(full)}</div>
                 <div class="nl-mo">
@@ -1564,9 +1588,7 @@
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ДИАЛОГ СОЗДАНИЯ / РЕДАКТИРОВАНИЯ
-    // ═══════════════════════════════════════════════════════════════
+    // ДИАЛОГ СОЗДАНИЯ / РЕДАКТИРОВАНИЯ
     function createDialog() {
         if (!TPLS.custom) TPLS.custom=[];
         if (TPLS.custom.length>=MAX_CUSTOM){ alert(`Лимит: ${MAX_CUSTOM} кастомных шаблонов.`); return; }
@@ -1610,9 +1632,469 @@
         ov.onclick=e=>{if(e.target===ov)ov.remove();};
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ВЫБОР ТЕМЫ
-    // ═══════════════════════════════════════════════════════════════
+    // собирает и вставляет пост по одному или нескольким пунктам правил
+    // (общая точка для конструктора, мастера решений и командной строки)
+    function insertCombinedRules(approved, rules) {
+        if (!rules.length) return false;
+        if (!confirmOverwriteIfNeeded()) return false;
+        const { name, id } = getAuthor();
+        const mention = id ? `[USER=${id}]${name}[/USER]` : name;
+        const srv = String(SETS.serverName||'ASTANA').toUpperCase();
+        const body = combinedRuleBody(approved, rules);
+        const title = (approved?'Одобрено':'Отказано') + (rules.length>1 ? ` (сборный, ${rules.length} п.)` : ` — пункт ${rules[0]}`);
+        const syntheticTpl = { id:'combo_'+Date.now(), title, prefix: approved?P.ACCEPT:P.UNACCEPT, uses:0 };
+        finishInsert(syntheticTpl, wrapPost(mention, srv, body));
+        return true;
+    }
+
+    // КОНСТРУКТОР НАРУШЕНИЙ (несколько пунктов правил в одном посте)
+    function openRuleBuilder() {
+        const hd = theme();
+        const ov = document.createElement('div'); ov.className='nl-dov';
+        const sectionNames = { '2':'Игровой процесс', '3':'Правила чата', '4':'Никнеймы и промокоды' };
+
+        let html='', curSection=null, groupOpen=false;
+        Object.keys(RULES).forEach(rule => {
+            const sect = rule.split('.')[0];
+            if (sect !== curSection) {
+                if (groupOpen) html += `</div>`;
+                html += `<div class="nl-rb-section" data-section="${sect}"><div class="nl-rb-group">Раздел ${sect} — ${sectionNames[sect]||''}</div>`;
+                curSection = sect; groupOpen = true;
+            }
+            const r = RULES[rule];
+            html += `<label class="nl-rb-row" data-search="${esc(rule+' '+r.desc)}"><input type="checkbox" value="${rule}"><span><b>${rule}</b> — ${esc(r.desc)} <span class="nl-rb-pen">| ${esc(r.penalty)}</span></span></label>`;
+        });
+        if (groupOpen) html += `</div>`;
+
+        ov.innerHTML = `
+            <div class="nl-dbox" style="width:660px">
+                <div class="nl-dt" style="text-align:center">⚖ Конструктор нарушений</div>
+                <div class="nl-dtabs">
+                    <button class="nl-dtab active" data-v="accept">✅ Одобрено</button>
+                    <button class="nl-dtab" data-v="unaccept">❌ Отказано</button>
+                </div>
+                <input class="nl-in" id="rb-search" placeholder="Поиск по номеру или описанию…">
+                <div id="rb-list" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">${html}</div>
+                <div class="nl-empty" id="rb-empty" style="display:none;padding:16px"><div class="nl-empty-icon">🔍</div>Ничего не найдено</div>
+                <div class="nl-da" style="justify-content:space-between;align-items:center">
+                    <span id="rb-count" style="font-size:12px;color:${hd.text2}">Выбрано: 0</span>
+                    <div style="display:flex;gap:8px">
+                        <button class="nl-btn nl-bd" id="rb-cancel">Отмена</button>
+                        <button class="nl-btn nl-bp" id="rb-insert" disabled>Вставить</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(ov);
+
+        let approved = true;
+        ov.querySelectorAll('.nl-dtab').forEach(tab => {
+            tab.onclick = () => {
+                ov.querySelectorAll('.nl-dtab').forEach(t=>t.classList.remove('active'));
+                tab.classList.add('active');
+                approved = tab.dataset.v === 'accept';
+            };
+        });
+
+        const countEl = ov.querySelector('#rb-count');
+        const insertBtn = ov.querySelector('#rb-insert');
+        const updateCount = () => {
+            const n = ov.querySelectorAll('#rb-list input:checked').length;
+            countEl.textContent = `Выбрано: ${n}`;
+            insertBtn.disabled = n === 0;
+        };
+        ov.querySelector('#rb-list').addEventListener('change', updateCount);
+
+        ov.querySelector('#rb-search').oninput = e => {
+            const q = e.target.value.trim();
+            let anyRowVisible = false;
+            ov.querySelectorAll('#rb-list .nl-rb-row').forEach(row => {
+                const vis = !q || fuzz(q, row.dataset.search);
+                row.style.display = vis ? '' : 'none';
+                if (vis) anyRowVisible = true;
+            });
+            ov.querySelectorAll('.nl-rb-section').forEach(sec => {
+                const anyVisible = [...sec.querySelectorAll('.nl-rb-row')].some(r=>r.style.display!=='none');
+                sec.style.display = anyVisible ? '' : 'none';
+            });
+            ov.querySelector('#rb-empty').style.display = anyRowVisible ? 'none' : '';
+            ov.querySelector('#rb-list').style.display = anyRowVisible ? '' : 'none';
+        };
+
+        ov.querySelector('#rb-cancel').onclick = () => ov.remove();
+        ov.querySelector('#rb-insert').onclick = () => {
+            const rules = [...ov.querySelectorAll('#rb-list input:checked')].map(i=>i.value);
+            if (!rules.length) return;
+            if (insertCombinedRules(approved, rules)) ov.remove();
+        };
+        ov.onclick = e => { if (e.target===ov) ov.remove(); };
+    }
+
+    // МАСТЕР РЕШЕНИЙ — пошаговый разбор жалобы: текст → доказательства → категория → готовый пост
+
+    // хостинги скриншотов/видео и расширения медиафайлов, по которым ищем доказательства
+    const EVIDENCE_HOSTS = /(?:postimg\.cc|postimages\.org|imgur\.com|ibb\.co|imgbb\.com|prnt\.sc|prntscr\.com|skrinshoter\.ru|snipboard\.io|youtube\.com|youtu\.be|rutube\.ru|streamable\.com|medal\.tv|twitch\.tv|vimeo\.com|drive\.google\.com|dropbox\.com|disk\.yandex|discord(?:app)?\.com)/i;
+    const EVIDENCE_FILE  = /\.(?:png|jpe?g|gif|webp|bmp|mp4|webm|mov|avi)(?:\?|$)/i;
+
+    function detectEvidence(text, postEl) {
+        const tokens = String(text||'').split(/\s+/);
+        const links = tokens.filter(t => EVIDENCE_HOSTS.test(t) || (/^https?:\/\//i.test(t) && EVIDENCE_FILE.test(t)));
+        let media = 0;
+        if (postEl) media = postEl.querySelectorAll('img:not(.smilie), video, iframe, a[href*="attachments"]').length;
+        return { found: links.length > 0 || media > 0, links: [...new Set(links)], media };
+    }
+
+    // слова, не помогающие отличить один пункт правил от другого
+    const RULE_STOP_WORDS = new Set([
+        'на','по','из','за','он','вы','мы','ты','их','до','от','об','во','со','не','ни','да','ее','её',
+        'она','они','оно','что','это','как','при','под','над','все','всех','был','была','было','или','без','для','его',
+        'любые','любая','любой','форма','формы','форме','пункт','пункту','пунктам',
+        'игрок','игроки','игрока','игроков','игрокам','человек','данный','данного',
+        'сервер','сервера','серверов','серверах','проекта',
+        'запрещено','запрещен','запрещена','запрещены','запрещается','запрещён',
+        'жалоба','жалобу','жалобы','одобрено','отказано','здравствуйте','пожалуйста','прошу','нарушение','нарушил',
+    ]);
+    const splitWords = s => String(s||'').toLowerCase().split(/[^a-zа-яё0-9.+\/]+/).filter(w => w.length >= 2 && !RULE_STOP_WORDS.has(w));
+
+    // ключевые слова каждого пункта: описание из RULES + теги готового шаблона
+    // (в тегах уже собраны сленг и аббревиатуры — «дм», «ск», «читы» и т.п.)
+    let RULE_KEYWORDS = null;
+    function ruleKeywords() {
+        if (RULE_KEYWORDS) return RULE_KEYWORDS;
+        RULE_KEYWORDS = {};
+        Object.keys(RULES).forEach(rule => {
+            const aTpl = DEFAULT_TEMPLATES.players.find(t => t.id === RULES[rule].a);
+            RULE_KEYWORDS[rule] = { tags: new Set(splitWords(aTpl && aTpl.tags)), desc: new Set(splitWords(RULES[rule].desc)) };
+        });
+        return RULE_KEYWORDS;
+    }
+
+    // сортирует пункты правил по похожести на текст жалобы — локальное сравнение ключевых слов
+    function scoreRulesByText(text) {
+        const kw = ruleKeywords();
+        const tokens = [...new Set(splitWords(text))];
+        return Object.keys(RULES).map(rule => {
+            let score = 0;
+            const { tags, desc } = kw[rule];
+            tokens.forEach(tok => {
+                if (tok === rule)  { score += 10; return; } // в жалобе прямо указан номер пункта
+                if (tags.has(tok)) { score += 3;  return; }
+                if (desc.has(tok)) { score += 2;  return; }
+                if (tok.length >= 5) {                      // грубое совпадение по основе: «стрелял» ≈ «стрельба»
+                    const stem = tok.slice(0, 5);
+                    for (const w of tags) if (w.startsWith(stem)) { score += 2; return; }
+                    for (const w of desc) if (w.startsWith(stem)) { score += 1; return; }
+                }
+            });
+            return { rule, score };
+        }).sort((a, b) => b.score - a.score || (a.rule < b.rule ? -1 : 1));
+    }
+
+    // похожесть готового шаблона на текст жалобы — для сортировки списков админ/лидер/апелляция
+    function scoreTemplateByText(tpl, tokens) {
+        const hay = (tpl.title + ' ' + (tpl.tags||'') + ' ' + tpl.content).toLowerCase();
+        let score = 0;
+        tokens.forEach(tok => { if (tok.length >= 3 && hay.includes(tok)) score++; });
+        return score;
+    }
+
+    function openWizard() {
+        if (document.querySelector('.nl-wiz-ov')) return;
+        const hd = theme();
+        const postEl   = document.querySelector(SEL.firstPost);
+        const autoText = postEl ? postEl.textContent.trim() : '';
+        const state = {
+            step: 1,
+            text: autoText,
+            manualDraft: '',
+            evidence: detectEvidence(autoText, postEl),
+            evidenceOverride: null, // null — как определил скрипт; true/false — поправил куратор
+            category: null,
+        };
+        const hasEvidence = () => state.evidenceOverride === null ? state.evidence.found : state.evidenceOverride;
+        const dbh = !!theme().dbh; // в Detroit-темах мастер говорит языком анализа улик
+        const stepNames = dbh ? ['Анализ улик', 'Категория', 'Решение'] : ['Текст жалобы', 'Категория', 'Решение'];
+
+        const ov = document.createElement('div');
+        ov.className = 'nl-dov nl-wiz-ov';
+        ov.innerHTML = `
+            <div class="nl-dbox" style="width:660px">
+                <div class="nl-dt" style="text-align:center">🧙 Мастер решений</div>
+                <div class="nl-wiz-steps"></div>
+                <div id="wiz-body" style="display:flex;flex-direction:column;gap:13px"></div>
+            </div>`;
+        document.body.appendChild(ov);
+        ov.onclick = e => { if (e.target === ov) ov.remove(); };
+
+        const body = () => ov.querySelector('#wiz-body');
+
+        function render() {
+            ov.querySelector('.nl-wiz-steps').innerHTML = stepNames.map((n, i) =>
+                `<div class="nl-wiz-step${state.step === i+1 ? ' active' : state.step > i+1 ? ' done' : ''}">${i+1}. ${n}</div>`).join('');
+            if (state.step === 1)      renderStep1();
+            else if (state.step === 2) renderStep2();
+            else                       renderStep3();
+        }
+
+        function renderStep1() {
+            const ev  = state.evidence;
+            const has = hasEvidence();
+            const evColor = has ? '#22c55e' : '#ffa502';
+            body().innerHTML = `
+                ${state.text
+                    ? `<div class="nl-wiz-excerpt">${esc(state.text.substring(0,600))}${state.text.length>600?'…':''}</div>`
+                    : `<div class="nl-f"><label>Первый пост не найден — вставьте текст жалобы вручную</label><textarea class="nl-ta" id="wiz-manual" rows="6" placeholder="Текст жалобы…">${esc(state.manualDraft)}</textarea></div>`}
+                <div class="nl-wiz-verdict" style="border-color:${evColor}44;background:${evColor}10;color:${evColor}">
+                    <span>${has ? (dbh ? '✔ Улики обнаружены' : '✔ Доказательства обнаружены') : (dbh ? '✖ Улики не обнаружены' : '✖ Доказательства не обнаружены')}
+                        <span style="font-weight:400;opacity:.8">· ссылок: ${ev.links.length}, вложений: ${ev.media}</span></span>
+                    <span style="display:flex;gap:6px">
+                        <button class="nl-btn nl-btn-sm ${has?'nl-bs':'nl-bn'}" id="wiz-ev-yes">Есть</button>
+                        <button class="nl-btn nl-btn-sm ${!has?'nl-bd':'nl-bn'}" id="wiz-ev-no">Нет</button>
+                    </span>
+                </div>
+                <div style="font-size:11px;color:${hd.text2};font-family:var(--nl-font)">Скрипт ищет в первом посте ссылки на скриншоты и видео (postimg, imgur, YouTube и т.п.) и вложения. Если он ошибся — поправьте кнопками выше.</div>
+                <div class="nl-da"><button class="nl-btn nl-bp" id="wiz-next">Далее →</button></div>`;
+            const stashManual = () => { const m = body().querySelector('#wiz-manual'); if (m) state.manualDraft = m.value; };
+            body().querySelector('#wiz-ev-yes').onclick = () => { stashManual(); state.evidenceOverride = true;  render(); };
+            body().querySelector('#wiz-ev-no').onclick  = () => { stashManual(); state.evidenceOverride = false; render(); };
+            body().querySelector('#wiz-next').onclick   = () => {
+                const m = body().querySelector('#wiz-manual');
+                if (m && m.value.trim()) {
+                    state.text = m.value.trim();
+                    if (state.evidenceOverride === null) state.evidence = detectEvidence(state.text, null);
+                }
+                state.step = 2; render();
+            };
+        }
+
+        function renderStep2() {
+            body().innerHTML = `
+                <div class="nl-wiz-cat">
+                    <button data-c="players"><span class="t">👤 Игрок</span><span class="d">Жалоба на игрока — подбор пунктов правил</span></button>
+                    <button data-c="admins"><span class="t">🛡 Администратор</span><span class="d">Жалоба на действия администрации</span></button>
+                    <button data-c="leaders"><span class="t">👑 Лидер</span><span class="d">Жалоба на лидера фракции</span></button>
+                    <button data-c="appeals"><span class="t">⚖️ Апелляция</span><span class="d">Обжалование наказания</span></button>
+                </div>
+                <div class="nl-da" style="justify-content:flex-start"><button class="nl-btn nl-bn" id="wiz-back">← Назад</button></div>`;
+            body().querySelectorAll('.nl-wiz-cat button').forEach(b => {
+                b.onclick = () => { state.category = b.dataset.c; state.step = 3; render(); };
+            });
+            body().querySelector('#wiz-back').onclick = () => { state.step = 1; render(); };
+        }
+
+        function renderStep3() {
+            if (state.category === 'players') renderStep3Rules();
+            else renderStep3Templates();
+        }
+
+        const tplById = tid => Object.values(TPLS).flat().find(t => t.id === tid);
+
+        function renderStep3Rules() {
+            const scored = scoreRulesByText(state.text);
+            const matchCut = Math.min(5, scored.filter(s => s.score >= 3).length);
+            let approved = hasEvidence();
+            const rowsHtml = scored.map((s, i) => {
+                const r = RULES[s.rule];
+                const badge = (i < matchCut) ? '<span class="nl-wiz-match">похоже на это</span>' : '';
+                return `<label class="nl-rb-row" data-search="${esc(s.rule + ' ' + r.desc)}"><input type="checkbox" value="${s.rule}"><span><b>${s.rule}</b> — ${esc(r.desc)} <span class="nl-rb-pen">| ${esc(r.penalty)}</span>${badge}</span></label>`;
+            }).join('');
+            body().innerHTML = `
+                ${!hasEvidence() ? `<div class="nl-wiz-quick"><span>Доказательств нет — можно сразу:</span>
+                    <button class="nl-btn nl-btn-sm nl-bn" id="wiz-q-wait">⏳ Запросить доказательства</button>
+                    <button class="nl-btn nl-btn-sm nl-bd" id="wiz-q-deny">✖ Отказать</button></div>` : ''}
+                <div class="nl-dtabs">
+                    <button class="nl-dtab${approved?' active':''}" data-v="accept">✅ Одобрено</button>
+                    <button class="nl-dtab${!approved?' active':''}" data-v="unaccept">❌ Отказано</button>
+                </div>
+                <input class="nl-in" id="wiz-search" placeholder="Фильтр по номеру или описанию…">
+                <div id="wiz-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">${rowsHtml}</div>
+                <div class="nl-da" style="justify-content:space-between;align-items:center">
+                    <button class="nl-btn nl-bn" id="wiz-back">← Назад</button>
+                    <span style="display:flex;gap:10px;align-items:center">
+                        <span id="wiz-count" style="font-size:12px;color:${hd.text2};font-family:var(--nl-font)">Выбрано: 0</span>
+                        <button class="nl-btn nl-bp" id="wiz-insert" disabled>Вставить</button>
+                    </span>
+                </div>`;
+            const quick = (btnId, tplId) => {
+                const b = body().querySelector(btnId);
+                if (b) b.onclick = () => { const t = tplById(tplId); if (!t) return; curTab = 'players'; ov.remove(); insertTemplate(t); };
+            };
+            quick('#wiz-q-wait', 'p6');
+            quick('#wiz-q-deny', 'p4');
+            body().querySelectorAll('.nl-dtab').forEach(tab => {
+                tab.onclick = () => {
+                    body().querySelectorAll('.nl-dtab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    approved = tab.dataset.v === 'accept';
+                };
+            });
+            const list = body().querySelector('#wiz-list');
+            const insertBtn = body().querySelector('#wiz-insert');
+            list.addEventListener('change', () => {
+                const n = list.querySelectorAll('input:checked').length;
+                body().querySelector('#wiz-count').textContent = `Выбрано: ${n}`;
+                insertBtn.disabled = n === 0;
+            });
+            body().querySelector('#wiz-search').oninput = e => {
+                const q = e.target.value.trim();
+                list.querySelectorAll('.nl-rb-row').forEach(row => {
+                    row.style.display = (!q || fuzz(q, row.dataset.search)) ? '' : 'none';
+                });
+            };
+            insertBtn.onclick = () => {
+                const rules = [...list.querySelectorAll('input:checked')].map(i => i.value);
+                curTab = 'players';
+                if (insertCombinedRules(approved, rules)) ov.remove();
+            };
+            body().querySelector('#wiz-back').onclick = () => { state.step = 2; render(); };
+        }
+
+        function renderStep3Templates() {
+            const tabId  = state.category;
+            const tokens = [...new Set(splitWords(state.text))];
+            const items  = [...(TPLS[tabId]||[])]
+                .map(t => ({ t, score: scoreTemplateByText(t, tokens) }))
+                .sort((a, b) => b.score - a.score || (b.t.isPinned?1:0) - (a.t.isPinned?1:0));
+            const maxScore = items.length ? items[0].score : 0;
+            body().innerHTML = `
+                <div style="font-size:11px;color:${hd.text2};font-family:var(--nl-font)">Шаблоны раздела «${esc(TABS.find(t=>t.id===tabId)?.name||tabId)}», самые похожие на текст жалобы — сверху. Клик — вставить.</div>
+                <div style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+                    ${items.map(({t,score},i) => {
+                        const pc = PREFIX_COLORS[t.prefix]||'#666';
+                        const preview = t.content.replace(/\[.*?\]/g,'').substring(0,110);
+                        const badge = (score>0 && score===maxScore && maxScore>=2) ? '<span class="nl-wiz-match">похоже на это</span>' : '';
+                        return `<div class="nl-wiz-tplrow" data-i="${i}">
+                            <span style="font-weight:700;font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:${hd.text}">${esc(t.title)}${badge}</span>
+                            <span style="font-size:11px;color:${hd.text2}">${esc(preview)}…</span>
+                            <span class="nl-badge" style="background:${pc}12;color:${pc};border:1px solid ${pc}30;align-self:flex-start">${PREFIX_NAMES[t.prefix]||'Без префикса'}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div class="nl-da" style="justify-content:flex-start"><button class="nl-btn nl-bn" id="wiz-back">← Назад</button></div>`;
+            body().querySelectorAll('.nl-wiz-tplrow').forEach(row => {
+                row.onclick = () => {
+                    const t = items[parseInt(row.dataset.i)].t;
+                    curTab = tabId;
+                    ov.remove();
+                    insertTemplate(t);
+                };
+            });
+            body().querySelector('#wiz-back').onclick = () => { state.step = 2; render(); };
+        }
+
+        render();
+    }
+
+    // КОМАНДНАЯ СТРОКА (Alt+K) — быстрые действия одной строкой, в духе командной палитры VS Code
+
+    const CMD_ACTIONS = [
+        { words:['био','биография','bio','анализ'],       icon:'📋', label:'Анализатор биографий',  run:()=>openBioAnalyzer() },
+        { words:['статистика','стат','stats'],            icon:'📊', label:'Статистика',            run:()=>openStats() },
+        { words:['настройки','опции','settings'],         icon:'⚙️', label:'Настройки',             run:()=>openSettings() },
+        { words:['история','history'],                    icon:'🕐', label:'История использования', run:()=>openHistory() },
+        { words:['профиль','ачивки','уровень','profile'], icon:'🏅', label:'Профиль куратора',      run:()=>openProfile() },
+        { words:['мастер','разобрать','жалоба','wizard'], icon:'🧙', label:'Мастер решений',        run:()=>openWizard() },
+        { words:['конструктор','builder'],                icon:'⚖',  label:'Конструктор нарушений', run:()=>openRuleBuilder() },
+        { words:['тема','оформление','theme'],            icon:'🎨', label:'Тема оформления',       run:()=>openThemePicker() },
+        { words:['помощник','окно','шаблоны','open'],     icon:'⬡',  label:'Открыть NL Helper',     run:()=>openMain() },
+    ];
+    const CMD_ACCEPT_WORDS = ['одобрено','одобр','одобрить','принять','accept','ok','да','+'];
+    const CMD_REJECT_WORDS = ['отказано','отказ','отказать','отклонить','deny','reject','нет','-'];
+
+    // разбирает ввод и строит подсказки: «2.01 одобрено» → пост по пункту,
+    // служебное слово → окно, любой другой текст → fuzzy-поиск по шаблонам
+    function buildCmdSuggestions(q) {
+        q = q.trim().toLowerCase();
+        const items = [];
+        if (!q) {
+            CMD_ACTIONS.forEach(a => items.push({ icon:a.icon, label:a.label, hint:'открыть', run:a.run }));
+            return items;
+        }
+        const m = q.match(/^(\d+\.\d+)\s*(.*)$/);
+        if (m) {
+            const [, rule, rest] = m;
+            if (RULES[rule]) {
+                const wantAccept = !rest || CMD_ACCEPT_WORDS.some(w => rest.startsWith(w));
+                const wantReject = !rest || CMD_REJECT_WORDS.some(w => rest.startsWith(w));
+                if (wantAccept) items.push({ icon:'✅', label:`${rule} Одобрено — ${RULES[rule].desc}`,  hint:'вставить пост', run:()=>insertCombinedRules(true,[rule]) });
+                if (wantReject) items.push({ icon:'❌', label:`${rule} Отказано — ${RULES[rule].desc}`, hint:'вставить пост', run:()=>insertCombinedRules(false,[rule]) });
+            } else {
+                items.push({ icon:'⚠️', label:`Пункта ${rule} нет в таблице правил`, hint:'', run:null });
+            }
+        }
+        CMD_ACTIONS.forEach(a => {
+            if (a.words.some(w => w.startsWith(q) || q.startsWith(w))) items.push({ icon:a.icon, label:a.label, hint:'открыть', run:a.run });
+        });
+        // отсылки к Detroit: Become Human
+        if (q === 'ra9' || q === 'ра9' || q === 'ra 9') {
+            items.push({ icon:'🤖', label:'rA9 rA9 rA9 rA9 rA9 rA9 rA9', hint:'?????', run:()=>{
+                document.body.classList.add('nl-ra9');
+                showNotification('⚠ НЕСТАБИЛЬНОСТЬ ПО ▲', 'error');
+                setTimeout(()=>document.body.classList.remove('nl-ra9'), 2600);
+            }});
+        }
+        if (q === 'коннор' || q === 'connor' || q === 'rk800') {
+            items.push({ icon:'👔', label:'«Меня зовут Коннор. Я — андроид, присланный из „Киберлайф“»', hint:'RK800', run:()=>showNotification('🤖 Модель RK800 подключена', 'success') });
+        }
+        if (q === 'иерихон' || q === 'jericho') {
+            items.push({ icon:'🚢', label:'Иерихон найден — сменить облик', hint:'темы', run:()=>openThemePicker() });
+        }
+        Object.entries(TPLS).forEach(([tabId, arr]) => arr.forEach(t => {
+            if (items.length >= 24) return;
+            if (fuzz(q, t.title) || fuzz(q, t.tags||'')) {
+                const tab = TABS.find(x => x.id === tabId);
+                items.push({ icon:'📄', label:t.title, hint:(tab ? tab.name : tabId), run:()=>{ curTab = tabId; insertTemplate(t); } });
+            }
+        }));
+        return items.slice(0, 9);
+    }
+
+    function openCmdPalette() {
+        if (document.querySelector('.nl-cmd-ov')) return;
+        const ov = document.createElement('div');
+        ov.className = 'nl-cmd-ov';
+        ov.innerHTML = `
+            <div class="nl-cmd-box">
+                <input class="nl-cmd-in" placeholder="2.01 одобрено · био · статистика · название шаблона…" spellcheck="false">
+                <div class="nl-cmd-list"></div>
+                <div class="nl-cmd-hint">↑↓ — выбор&nbsp;&nbsp;·&nbsp;&nbsp;Enter — выполнить&nbsp;&nbsp;·&nbsp;&nbsp;Esc — закрыть</div>
+            </div>`;
+        document.body.appendChild(ov);
+        const input = ov.querySelector('.nl-cmd-in');
+        const list  = ov.querySelector('.nl-cmd-list');
+        let sugg = [], sel = 0;
+
+        const render = () => {
+            sugg = buildCmdSuggestions(input.value);
+            if (sel >= sugg.length) sel = Math.max(0, sugg.length - 1);
+            list.innerHTML = sugg.length
+                ? sugg.map((s, i) => `<div class="nl-cmd-item${i===sel?' active':''}" data-i="${i}">
+                        <span class="nl-cmd-ico">${s.icon}</span>
+                        <span class="nl-cmd-lbl">${esc(s.label)}</span>
+                        ${s.hint?`<span class="nl-cmd-tag">${esc(s.hint)}</span>`:''}
+                    </div>`).join('')
+                : '<div class="nl-cmd-empty">Ничего не найдено</div>';
+            list.querySelectorAll('.nl-cmd-item').forEach(el => {
+                el.onclick = () => exec(parseInt(el.dataset.i));
+            });
+        };
+        const exec = i => {
+            const s = sugg[i];
+            if (!s || !s.run) return;
+            ov.remove();
+            s.run();
+        };
+        input.oninput = () => { sel = 0; render(); };
+        input.onkeydown = e => {
+            if (e.key === 'ArrowDown')    { e.preventDefault(); if (sel < sugg.length-1) { sel++; render(); } }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); if (sel > 0) { sel--; render(); } }
+            else if (e.key === 'Enter')   { e.preventDefault(); exec(sel); }
+        };
+        ov.onclick = e => { if (e.target === ov) ov.remove(); };
+        render();
+        input.focus();
+    }
+
+    // ВЫБОР ТЕМЫ
     function openThemePicker() {
         const pk=document.createElement('div'); pk.className='nl-hov';
         pk.innerHTML=`
@@ -1629,14 +2111,18 @@
             </div>`;
         document.body.appendChild(pk);
         pk.querySelectorAll('.nl-hi').forEach(i=>{
-            i.onclick=()=>{ curTheme=i.dataset.k; localStorage.setItem(STORAGE.THEME,curTheme); pk.remove(); applyCSS(); closeMain(); setTimeout(openMain,50); };
+            i.onclick=()=>{
+                curTheme=i.dataset.k; GM_setValue(STORAGE.THEME,curTheme); pk.remove(); applyCSS();
+                // плавающая панель кнопок стилизована инлайном — пересоздаём её под новую тему
+                const fp=document.getElementById('nl-float-panel');
+                if (fp) { fp.remove(); injectButtons(); }
+                closeMain(); setTimeout(openMain,50);
+            };
         });
         pk.querySelector('.nl-hclose').onclick=()=>pk.remove();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ИСТОРИЯ
-    // ═══════════════════════════════════════════════════════════════
+    // ИСТОРИЯ
     function openHistory() {
         const ov=document.createElement('div'); ov.className='nl-dov';
         const rows = HIST.length===0
@@ -1653,7 +2139,7 @@
                 </div>`;
             }).join('');
         ov.innerHTML=`
-            <div class="nl-dbox" style="width:520px">
+            <div class="nl-dbox">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="nl-dt">🕐 История использования</div>
                     ${HIST.length?'<button class="nl-btn nl-bd nl-btn-sm" id="hc">Очистить</button>':''}
@@ -1669,9 +2155,7 @@
         ov.onclick=e=>{if(e.target===ov)ov.remove();};
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  СТАТИСТИКА
-    // ═══════════════════════════════════════════════════════════════
+    // СТАТИСТИКА
     function openStats() {
         const hd=theme();
         const ov=document.createElement('div'); ov.className='nl-dov';
@@ -1682,7 +2166,7 @@
         const max7=Math.max(...days7.map(d=>d.count),1);
 
         ov.innerHTML=`
-            <div class="nl-dbox" style="width:500px">
+            <div class="nl-dbox">
                 <div class="nl-dt" style="text-align:center">📊 Статистика</div>
                 <div class="nl-stat-row"><span class="nl-stat-title">Всего использований</span><span class="nl-stat-val ok">${STATS.total||0}</span></div>
                 <div class="nl-stat-section">📅 Активность за 7 дней</div>
@@ -1701,7 +2185,7 @@
                     ${byTab.map(([id,cnt])=>{
                         const tab=TABS.find(t=>t.id===id);
                         return `<div class="nl-bar-wrap">
-                            <div style="width:130px;font-size:12px;color:${hd.text2};font-family:'Rajdhani',sans-serif">${tab?.name||id}</div>
+                            <div style="width:130px;font-size:12px;color:${hd.text2};font-family:var(--nl-font)">${tab?.name||id}</div>
                             <div class="nl-bar"><div class="nl-bar-fill" style="width:${Math.round(cnt/maxT*100)}%;background:${hd.accent}"></div></div>
                             <div style="font-size:12px;color:${hd.text};font-weight:600;width:26px;text-align:right;font-family:'Share Tech Mono',monospace">${cnt}</div>
                         </div>`;
@@ -1709,43 +2193,239 @@
                 </div>
                 <div class="nl-stat-section">🏆 Топ шаблонов</div>
                 <div class="nl-stat-grid">
-                    ${allTpls.map((t,i)=>`<div class="nl-stat-row"><span class="nl-stat-title">${i+1}. ${esc(t.title)}</span><span class="nl-stat-val" style="color:${hd.accent}">×${t.uses||0}</span></div>`).join('')||`<div class="nl-empty" style="padding:10px;font-size:13px">Нет данных</div>`}
+                    ${allTpls.map((t,i)=>`<div class="nl-bar-wrap">
+                            <div style="width:130px;font-size:12px;color:${hd.text2};font-family:var(--nl-font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.title)}">${i+1}. ${esc(t.title)}</div>
+                            <div class="nl-bar"><div class="nl-bar-fill" style="width:${Math.round((t.uses||0)/(allTpls[0]?.uses||1)*100)}%;background:${hd.accent}"></div></div>
+                            <div style="font-size:12px;color:${hd.text};font-weight:600;width:26px;text-align:right;font-family:'Share Tech Mono',monospace">${t.uses||0}</div>
+                        </div>`).join('')||`<div class="nl-empty" style="padding:10px;font-size:13px">Нет данных</div>`}
                 </div>
                 <div class="nl-da" style="justify-content:space-between">
                     <button class="nl-btn nl-bd nl-btn-sm" id="sr">Сбросить</button>
-                    <button class="nl-btn nl-bp" id="sx">Закрыть</button>
+                    <div style="display:flex;gap:8px">
+                        <button class="nl-btn nl-bn nl-btn-sm" id="sprof">🏅 Профиль</button>
+                        <button class="nl-btn nl-bn nl-btn-sm" id="scsv">⬇ CSV</button>
+                        <button class="nl-btn nl-bp" id="sx">Закрыть</button>
+                    </div>
                 </div>
             </div>`;
         document.body.appendChild(ov);
         ov.querySelector('#sx').onclick=()=>ov.remove();
+        ov.querySelector('#sprof').onclick=()=>{ ov.remove(); openProfile(); };
         ov.querySelector('#sr').onclick=()=>{
             if(!confirm('Сбросить статистику?')) return;
             STATS={total:0,byPrefix:{},byTab:{},byDay:{}};
             Object.values(TPLS).flat().forEach(t=>t.uses=0);
             saveStats(); saveTemplates(); ov.remove();
         };
+        ov.querySelector('#scsv').onclick=()=>{
+            const rows=['Раздел;Использований'];
+            Object.entries(STATS.byTab||{}).sort(([,a],[,b])=>b-a).forEach(([id,cnt])=>{
+                const tab=TABS.find(t=>t.id===id);
+                rows.push(`"${(tab?.name||id).replace(/"/g,'""')}";${cnt}`);
+            });
+            rows.push('', 'Шаблон;Использований');
+            Object.values(TPLS).flat().filter(t=>t.uses).sort((a,b)=>(b.uses||0)-(a.uses||0)).forEach(t=>{
+                rows.push(`"${String(t.title).replace(/"/g,'""')}";${t.uses||0}`);
+            });
+            rows.push('', `Всего использований;${STATS.total||0}`);
+            const csv=String.fromCharCode(0xFEFF)+rows.join('\r\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+            const url=URL.createObjectURL(blob);
+            const a=Object.assign(document.createElement('a'),{href:url,download:`nl-helper-stats-${fmtDate(Date.now()).replace(/\./g,'-')}.csv`});
+            a.click(); URL.revokeObjectURL(url);
+        };
         ov.onclick=e=>{if(e.target===ov)ov.remove();};
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  АНАЛИЗАТОР БИОГРАФИИ
-    // ═══════════════════════════════════════════════════════════════
+    // ПРОФИЛЬ КУРАТОРА — уровень, ачивки и факты поверх уже собираемой статистики (STATS)
+
+    // до следующего уровня нужно level*25 использований: 25, 50, 75…
+    function levelFromTotal(total) {
+        let level = 1, need = 25, spent = 0;
+        while (total >= spent + need) { spent += need; level++; need = level * 25; }
+        return { level, cur: total - spent, next: need };
+    }
+
+    // серии дней подряд по STATS.byDay (ключи YYYY-MM-DD, как пишет recordUse)
+    function calcStreaks(byDay) {
+        const days = Object.keys(byDay || {}).filter(d => byDay[d] > 0).sort();
+        let best = 0, run = 0, prev = null;
+        days.forEach(d => {
+            run = (prev !== null && Date.parse(d) - Date.parse(prev) === 86400000) ? run + 1 : 1;
+            if (run > best) best = run;
+            prev = d;
+        });
+        const today     = new Date().toISOString().slice(0, 10);
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const current = (days.length && (prev === today || prev === yesterday)) ? run : 0;
+        return { best, current };
+    }
+
+    const ACHIEVEMENTS = [
+        { icon:'🥉', name:'Первые шаги',      desc:'10 использований',   test:p => p.total >= 10 },
+        { icon:'🥈', name:'В деле',           desc:'50 использований',   test:p => p.total >= 50 },
+        { icon:'🥇', name:'Сотня',            desc:'100 использований',  test:p => p.total >= 100 },
+        { icon:'🎖', name:'Ветеран',          desc:'250 использований',  test:p => p.total >= 250 },
+        { icon:'💎', name:'Мастер',           desc:'500 использований',  test:p => p.total >= 500 },
+        { icon:'🏆', name:'Легенда форума',   desc:'1000 использований', test:p => p.total >= 1000 },
+        { icon:'🔥', name:'Разогрев',         desc:'3 дня подряд',       test:p => p.bestStreak >= 3 },
+        { icon:'⚡', name:'Без выходных',     desc:'7 дней подряд',      test:p => p.bestStreak >= 7 },
+        { icon:'🚀', name:'Две недели',       desc:'14 дней подряд',     test:p => p.bestStreak >= 14 },
+        { icon:'👑', name:'Железный куратор', desc:'30 дней подряд',     test:p => p.bestStreak >= 30 },
+    ];
+
+    // собирает профиль из статистики; ничего не пишет — только считает
+    function computeProfile(stats, tpls) {
+        const total = stats.total || 0;
+        const lv = levelFromTotal(total);
+        const st = calcStreaks(stats.byDay);
+        const p = { total, level: lv.level, xpCur: lv.cur, xpNext: lv.next, bestStreak: st.best, curStreak: st.current };
+        p.achievements = ACHIEVEMENTS.map(a => ({ icon:a.icon, name:a.name, desc:a.desc, unlocked:a.test(p) }));
+        p.unlockedCount = p.achievements.filter(a => a.unlocked).length;
+
+        const topTab = Object.entries(stats.byTab || {}).sort(([,a],[,b]) => b - a)[0];
+        p.favTab = topTab ? (TABS.find(t => t.id === topTab[0])?.name || topTab[0]) : null;
+        const topTpl = Object.values(tpls).flat().filter(t => t.uses > 0).sort((a,b) => (b.uses||0)-(a.uses||0))[0];
+        p.favTpl = topTpl ? topTpl.title : null;
+        const wd = [0,0,0,0,0,0,0];
+        Object.entries(stats.byDay || {}).forEach(([d, c]) => { wd[new Date(d).getDay()] += c; });
+        const maxWd = Math.max(...wd);
+        p.favWeekday = maxWd > 0 ? ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][wd.indexOf(maxWd)] : null;
+        p.activeDays = Object.keys(stats.byDay || {}).filter(d => stats.byDay[d] > 0).length;
+        const rec = Object.entries(stats.byDay || {}).sort(([,a],[,b]) => b - a)[0];
+        p.recordDay = rec && rec[1] > 0 ? { date: rec[0], count: rec[1] } : null;
+        return p;
+    }
+
+    // рисует карточку профиля на canvas — можно сохранить как PNG
+    function renderProfileCard(p) {
+        const hd = theme();
+        const cv = document.createElement('canvas');
+        cv.width = 720; cv.height = 400;
+        const x = cv.getContext('2d');
+        x.fillStyle = hd.bg; x.fillRect(0, 0, 720, 400);
+        x.strokeStyle = hd.accent + '12'; x.lineWidth = 1;
+        for (let i = 0; i <= 720; i += 28) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 400); x.stroke(); }
+        for (let i = 0; i <= 400; i += 28) { x.beginPath(); x.moveTo(0, i); x.lineTo(720, i); x.stroke(); }
+        x.strokeStyle = hd.accent; x.lineWidth = 2; x.strokeRect(1, 1, 718, 398);
+        const cardFont = hd.dbh ? 'Michroma, Jost, sans-serif' : 'Rajdhani, Segoe UI, sans-serif';
+        x.fillStyle = hd.text;
+        x.font = (hd.dbh ? '400 24px ' : '700 30px ') + cardFont;
+        x.fillText(hd.dbh ? 'CYBERLIFE · МОДЕЛЬ NL800' : 'NL HELPER — ПРОФИЛЬ КУРАТОРА', 28, 52);
+        x.fillStyle = hd.accent; x.fillRect(28, 66, 664, 2);
+        x.font = (hd.dbh ? '400 58px ' : '700 76px ') + cardFont;
+        x.fillText('LVL ' + p.level, 28, 150);
+        x.fillStyle = hd.text2;
+        x.font = '16px Consolas, monospace';
+        x.fillText(p.total + ' использований · ачивок ' + p.unlockedCount + '/' + p.achievements.length, 30, 180);
+        const pw = 664, ph = 14, py = 200;
+        x.fillStyle = hd.bg3; x.fillRect(28, py, pw, ph);
+        x.fillStyle = hd.accent; x.fillRect(28, py, Math.round(pw * Math.min(1, p.xpCur / p.xpNext)), ph);
+        x.strokeStyle = hd.border; x.strokeRect(28.5, py + .5, pw - 1, ph - 1);
+        x.fillStyle = hd.text2; x.font = '13px Consolas, monospace';
+        x.fillText(p.xpCur + ' / ' + p.xpNext + ' до следующего уровня', 30, py + 34);
+        let ax = 28;
+        x.font = '30px "Segoe UI Emoji", sans-serif';
+        p.achievements.forEach(a => {
+            x.globalAlpha = a.unlocked ? 1 : 0.22;
+            x.fillText(a.icon, ax, 292);
+            ax += 46;
+        });
+        x.globalAlpha = 1;
+        x.fillStyle = hd.text; x.font = '600 15px ' + (hd.dbh ? 'Jost, sans-serif' : 'Rajdhani, Segoe UI, sans-serif');
+        const facts = [];
+        if (p.favTab)         facts.push('Любимый раздел: ' + p.favTab.replace(/^\S+\s/, ''));
+        if (p.favWeekday)     facts.push('Самый активный день: ' + p.favWeekday);
+        if (p.bestStreak > 1) facts.push('Лучшая серия: ' + p.bestStreak + ' дн.');
+        x.fillText(facts.join('  ·  ').substring(0, 82), 28, 330);
+        x.fillStyle = hd.text2; x.font = '12px Consolas, monospace';
+        x.fillText('forum.blackrussia.online · ' + fmtDate(Date.now()) + (hd.dbh ? ' · rA9' : ''), 28, 374);
+        return cv;
+    }
+
+    function openProfile() {
+        const hd = theme();
+        const p = computeProfile(STATS, TPLS);
+        const pct = Math.min(100, Math.round(p.xpCur / p.xpNext * 100));
+        const facts = [];
+        if (p.favTab)      facts.push(['📂', 'Любимый раздел', p.favTab]);
+        if (p.favTpl)      facts.push(['📄', 'Любимый шаблон', p.favTpl]);
+        if (p.favWeekday)  facts.push(['📅', 'Самый активный день', p.favWeekday]);
+        if (p.recordDay)   facts.push(['🚩', 'Рекорд за день', `${p.recordDay.count} (${fmtDate(p.recordDay.date)})`]);
+        if (p.activeDays)  facts.push(['🗓', 'Активных дней всего', String(p.activeDays)]);
+        if (p.curStreak > 1) facts.push(['🔥', 'Текущая серия', `${p.curStreak} дн. подряд`]);
+        // отсылка к DBH: «нестабильность ПО» растёт с опытом, как у Коннора по пути девианта
+        if (theme().dbh) facts.push(['🤖', 'Нестабильность ПО', `▲ ${Math.min(99, p.level * 7 + p.unlockedCount * 3)}%`]);
+
+        const ov = document.createElement('div'); ov.className = 'nl-dov';
+        ov.innerHTML = `
+            <div class="nl-dbox">
+                <div class="nl-dt" style="text-align:center">${theme().dbh ? '🏅 Профиль андроида-куратора' : '🏅 Профиль куратора'}</div>
+                <div class="nl-prof-head">
+                    <div class="nl-prof-lvl"><span>LVL</span>${p.level}</div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px">
+                            <span style="font-family:'Share Tech Mono',monospace;font-size:12px;color:${hd.text2}">ОПЫТ: ${p.total} использований</span>
+                            <span style="font-family:'Share Tech Mono',monospace;font-size:12px;color:${hd.accent}">${p.xpCur} / ${p.xpNext} до LVL ${p.level+1}</span>
+                        </div>
+                        <div class="nl-bar" style="height:8px"><div class="nl-bar-fill" style="width:${pct}%;background:${hd.accent}"></div></div>
+                        <div style="font-family:var(--nl-font);font-size:11px;color:${hd.text2}">Серия: ${p.curStreak} дн. подряд · рекорд серии: ${p.bestStreak} дн.</div>
+                    </div>
+                </div>
+                <div class="nl-stat-section">🏅 Ачивки (${p.unlockedCount}/${p.achievements.length})</div>
+                <div class="nl-prof-ach">
+                    ${p.achievements.map(a => `
+                        <div class="nl-prof-a${a.unlocked ? ' on' : ''}" title="${esc(a.desc)}">
+                            <div class="i">${a.icon}</div>
+                            <div class="n">${esc(a.name)}</div>
+                            <div class="d">${esc(a.desc)}</div>
+                        </div>`).join('')}
+                </div>
+                ${facts.length ? `<div class="nl-stat-section">✨ Факты</div>
+                <div class="nl-stat-grid">${facts.map(([i, k, v]) => `
+                    <div class="nl-stat-row"><span class="nl-stat-title">${i} ${esc(k)}</span>
+                    <span class="nl-stat-val" style="color:${hd.accent};max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span></div>`).join('')}</div>` : ''}
+                <div id="pf-card-wrap" style="display:none;flex-direction:column;gap:10px"></div>
+                <div class="nl-da" style="justify-content:space-between">
+                    <button class="nl-btn nl-bn nl-btn-sm" id="pf-card">🖼 Карточка PNG</button>
+                    <button class="nl-btn nl-bp" id="pf-x">Закрыть</button>
+                </div>
+            </div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('#pf-x').onclick = () => ov.remove();
+        ov.querySelector('#pf-card').onclick = () => {
+            const wrap = ov.querySelector('#pf-card-wrap');
+            const url = renderProfileCard(p).toDataURL('image/png');
+            wrap.innerHTML = `<img src="${url}" alt="Карточка профиля" style="width:100%;border:1px solid ${hd.border}">` +
+                `<a class="nl-btn nl-bs nl-btn-sm" style="text-align:center;text-decoration:none" download="nl-profile.png" href="${url}">⬇ Скачать PNG</a>`;
+            wrap.style.display = 'flex';
+        };
+        ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    }
+
+    // АНАЛИЗАТОР БИОГРАФИИ
     function openBioAnalyzer() {
         const postEl = document.querySelector(SEL.firstPost);
         const autoText = postEl ? postEl.textContent.trim() : '';
         showBioWindow(autoText);
     }
 
+    // убирает BB-код разметку перед подсчётом слов/пунктуации, чтобы теги не искажали статистику
+    function stripBBCode(text) {
+        return text.replace(/\[[^\]]*\]/g, ' ');
+    }
+
     function analyzeBio(text) {
-        const words = text.split(/[\s\n]+/).filter(w=>w.length>0);
+        const clean = stripBBCode(text);
+        const words = clean.split(/[\s\n]+/).filter(w=>w.length>0);
         const terms = SETS.mgTerms || DEFAULT_MG_TERMS;
         const foundMg = [];
         terms.forEach(term => {
             const re = new RegExp('(?:^|[\\s,.:;!?"\'\\/\\\\(\\)\\[\\]])(' + term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')(?=[\\s,.:;!?"\'\\/\\\\(\\)\\[\\]]|$)','gi');
-            if (re.test(text)) foundMg.push(term);
+            if (re.test(clean)) foundMg.push(term);
         });
-        const badCommas    = (text.match(/,[^\s\n0-9)]/g)||[]).length;
-        const badSentences = (text.match(/[.!?]\s+[а-яёa-z]/g)||[]).length;
+        const badCommas    = (clean.match(/,[^\s\n0-9)]/g)||[]).length;
+        const badSentences = (clean.match(/[.!?]\s+[а-яёa-z]/g)||[]).length;
         const minWords     = SETS.minBioWords || 100;
         const wordsOk      = words.length >= minWords;
         const mgOk         = foundMg.length === 0;
@@ -1760,13 +2440,42 @@
         return { words: words.length, minWords, mg: [...new Set(foundMg)], commas: badCommas, sentences: badSentences, verdict, vColor };
     }
 
+    // экранирует текст и оборачивает найденные MG-термины и пунктуационные проблемы в <mark>
+    function highlightIssues(text, terms) {
+        const spans = [];
+        if (terms && terms.length) {
+            const alt = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+            const re = new RegExp('(^|[\\s,.:;!?"\'\\/\\\\(\\)\\[\\]])(' + alt + ')(?=[\\s,.:;!?"\'\\/\\\\(\\)\\[\\]]|$)', 'gi');
+            let m;
+            while ((m = re.exec(text))) {
+                const start = m.index + m[1].length;
+                spans.push({ start, end: start + m[2].length, color:'#ff4757' });
+            }
+        }
+        { const re=/,[^\s\n0-9)]/g; let m; while((m=re.exec(text))){ spans.push({start:m.index, end:m.index+1, color:'#ffa502'}); } }
+        { const re=/[.!?]\s+([а-яёa-z])/g; let m; while((m=re.exec(text))){ const s=m.index+m[0].length-1; spans.push({start:s, end:s+1, color:'#ffa502'}); } }
+        if (!spans.length) return esc(text);
+
+        spans.sort((a,b)=>a.start-b.start);
+        const kept=[]; let lastEnd=-1;
+        for (const s of spans) { if (s.start>=lastEnd) { kept.push(s); lastEnd=s.end; } }
+
+        let out='', last=0;
+        for (const s of kept) {
+            out += esc(text.slice(last, s.start)) + `<mark style="background:${s.color}33;color:${s.color};border-radius:2px;padding:0 2px">${esc(text.slice(s.start, s.end))}</mark>`;
+            last = s.end;
+        }
+        out += esc(text.slice(last));
+        return out;
+    }
+
     function showBioWindow(initialText) {
         if (document.querySelector('.nl-bio-ov')) return;
         const hd = theme();
         const ov = document.createElement('div');
         ov.className = 'nl-dov nl-bio-ov';
         ov.innerHTML = `
-            <div class="nl-dbox" style="width:620px">
+            <div class="nl-dbox" style="width:660px">
                 <div class="nl-dt" style="text-align:center">📋 Анализатор РП Биографии</div>
                 <div class="nl-dtabs">
                     <button class="nl-dtab active" data-panel="auto">🔍 Со страницы</button>
@@ -1774,8 +2483,8 @@
                 </div>
                 <div class="nl-dpanel active" id="bio-panel-auto">
                     ${initialText
-                        ? `<div style="font-size:12px;color:${hd.text2};background:${hd.bg3};border:1px solid ${hd.border};padding:12px 14px;max-height:130px;overflow-y:auto;line-height:1.55;font-family:'Rajdhani',sans-serif">${esc(initialText.substring(0,600))}${initialText.length>600?'…':''}</div>`
-                        : `<div style="text-align:center;padding:20px;color:#ff4757;font-size:13px;font-family:'Rajdhani',sans-serif">❌ Текст первого поста не найден на этой странице.</div>`
+                        ? `<div style="font-size:12px;color:${hd.text2};background:${hd.bg3};border:1px solid ${hd.border};padding:12px 14px;max-height:130px;overflow-y:auto;line-height:1.55;font-family:var(--nl-font)">${esc(initialText.substring(0,600))}${initialText.length>600?'…':''}</div>`
+                        : `<div style="text-align:center;padding:20px;color:#ff4757;font-size:13px;font-family:var(--nl-font)">❌ Текст первого поста не найден на этой странице.</div>`
                     }
                 </div>
                 <div class="nl-dpanel" id="bio-panel-manual">
@@ -1811,8 +2520,11 @@
             if (!text) { alert('Нет текста для анализа.'); return; }
             const res = analyzeBio(text);
             const resEl = ov.querySelector('#bio-result');
+            const mgTerms = SETS.mgTerms || DEFAULT_MG_TERMS;
             resEl.innerHTML = `
                 <div class="nl-verdict" style="background:${res.vColor}18;border:1px solid ${res.vColor}44;color:${res.vColor}">${esc(res.verdict)}</div>
+                ${(res.mg.length>0||res.commas>0||res.sentences>0) ? `<div style="font-size:12px;color:${hd.text2};background:${hd.bg3};border:1px solid ${hd.border};padding:12px 14px;max-height:160px;overflow-y:auto;line-height:1.6;font-family:var(--nl-font)">${highlightIssues(text, mgTerms)}</div>
+                <div style="font-size:11px;color:${hd.text2};display:flex;gap:14px"><span><mark style="background:#ff475733;color:#ff4757;border-radius:2px;padding:0 3px">текст</mark> MG-термин</span><span><mark style="background:#ffa50233;color:#ffa502;border-radius:2px;padding:0 3px">текст</mark> пунктуация</span></div>` : ''}
                 <div class="nl-stat-grid">
                     <div class="nl-stat-row">
                         <span class="nl-stat-title">Количество слов</span>
@@ -1846,20 +2558,25 @@
         ov.onclick = e => { if (e.target===ov) ov.remove(); };
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  НАСТРОЙКИ
-    // ═══════════════════════════════════════════════════════════════
+    // НАСТРОЙКИ
     function openSettings() {
         const ov=document.createElement('div'); ov.className='nl-dov';
         const renderTags=()=>(SETS.mgTerms||[]).map((w,i)=>`<div class="nl-tag">${esc(w)}<button data-i="${i}">×</button></div>`).join('');
         ov.innerHTML=`
-            <div class="nl-dbox" style="width:520px">
+            <div class="nl-dbox">
                 <div class="nl-dt">⚙️ Настройки</div>
                 <div class="nl-stat-section">🎮 Общие</div>
                 <div style="display:flex;flex-direction:column;gap:8px">
                     <div class="nl-set-row">
-                        <div><div class="nl-set-label">Горячие клавиши</div><div class="nl-set-desc">Alt+H — окно, Alt+B — биография, Alt+1-9 — вкладки, Esc — закрыть</div></div>
+                        <div><div class="nl-set-label">Горячие клавиши</div><div class="nl-set-desc">Alt+H — окно, Alt+K — командная строка, Alt+B — биография, Alt+A — отмена вставки, Alt+1-9 — вкладки, Esc — закрыть</div></div>
                         <label class="nl-cl2"><input type="checkbox" id="s-hk" ${SETS.hotkeys?'checked':''}></label>
+                    </div>
+                    <div class="nl-set-row">
+                        <div><div class="nl-set-label">Режим отображения</div><div class="nl-set-desc">«Панель сбоку» — помощник открывается справа, тема форума остаётся видна</div></div>
+                        <select class="nl-sel" id="s-uimode" style="width:150px">
+                            <option value="modal"${SETS.uiMode!=='dock'?' selected':''}>Окно</option>
+                            <option value="dock"${SETS.uiMode==='dock'?' selected':''}>Панель сбоку</option>
+                        </select>
                     </div>
                 </div>
                 <div class="nl-stat-section">📋 Анализатор биографий</div>
@@ -1874,6 +2591,12 @@
                         <div class="nl-tag-list" id="s-mg-list">${renderTags()}</div>
                     </div>
                 </div>
+                <div class="nl-stat-section">⭐ Мои шаблоны</div>
+                <div style="display:flex;gap:8px">
+                    <button class="nl-btn nl-bn nl-btn-sm" id="s-export">⬇ Экспорт</button>
+                    <button class="nl-btn nl-bn nl-btn-sm" id="s-import">⬆ Импорт</button>
+                    <input type="file" id="s-import-file" accept="application/json" style="display:none">
+                </div>
                 <div class="nl-da" style="justify-content:space-between">
                     <button class="nl-btn nl-bd nl-btn-sm" id="s-reset">Сброс шаблонов</button>
                     <div style="display:flex;gap:8px">
@@ -1885,6 +2608,7 @@
         document.body.appendChild(ov);
         const origSets = JSON.stringify(SETS);
         ov.querySelector('#s-hk').onchange=e=>SETS.hotkeys=e.target.checked;
+        ov.querySelector('#s-uimode').onchange=e=>SETS.uiMode=e.target.value;
         ov.querySelector('#s-min').oninput=e=>SETS.minBioWords=parseInt(e.target.value)||100;
         const list=ov.querySelector('#s-mg-list');
         const bindTags=()=>{
@@ -1900,6 +2624,45 @@
         };
         ov.querySelector('#s-mg-add').onclick=addMg;
         ov.querySelector('#s-mg-new').onkeydown=e=>{if(e.key==='Enter')addMg();};
+        ov.querySelector('#s-export').onclick=()=>{
+            const data = JSON.stringify({ version: STORAGE_VERSION, exportedAt: new Date().toISOString(), templates: TPLS.custom||[] }, null, 2);
+            const blob = new Blob([data], { type:'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `nl-helper-templates-${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        };
+        ov.querySelector('#s-import').onclick=()=>ov.querySelector('#s-import-file').click();
+        ov.querySelector('#s-import-file').onchange=e=>{
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.templates) ? parsed.templates : null);
+                    if (!list) throw new Error('bad format');
+                    if (!TPLS.custom) TPLS.custom = [];
+                    let added = 0, skipped = 0;
+                    for (const t of list) {
+                        if (!t || typeof t.content !== 'string' || typeof t.title !== 'string') { skipped++; continue; }
+                        if (TPLS.custom.length >= MAX_CUSTOM) { skipped++; continue; }
+                        TPLS.custom.push({
+                            id: 'u' + Date.now() + Math.random().toString(36).slice(2,7),
+                            title: t.title, prefix: parseInt(t.prefix)||0, tags: t.tags||'',
+                            content: t.content, isPinned: false, isNew: true, uses: 0,
+                        });
+                        added++;
+                    }
+                    saveTemplates(); renderCards();
+                    alert(`✅ Импортировано: ${added}` + (skipped ? `, пропущено: ${skipped}` : ''));
+                } catch (err) {
+                    alert('❌ Не удалось прочитать файл — проверь, что это JSON, экспортированный отсюда же.');
+                }
+                e.target.value = '';
+            };
+            reader.readAsText(file);
+        };
         ov.querySelector('#s-save').onclick=()=>{ saveSettings(); ov.remove(); };
         ov.querySelector('#s-cancel').onclick=()=>{ SETS=JSON.parse(origSets); ov.remove(); };
         ov.querySelector('#s-reset').onclick=()=>{
@@ -1909,14 +2672,43 @@
         ov.onclick=e=>{if(e.target===ov)ov.remove();};
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  КНОПКИ НА ФОРУМЕ
-    // ═══════════════════════════════════════════════════════════════
-    function showNotification(message, type='success') {
+    // КНОПКИ НА ФОРУМЕ
+    function showNotification(message, type='success', onUndo) {
         const n=document.createElement('div'); n.className='nl-notif';
-        n.style.cssText=`background:${type==='error'?'rgba(220,60,60,0.92)':theme().accent};color:${type==='error'?'#fff':'#000'};border:1px solid ${type==='error'?'#cc3333':theme().accent};`;
-        n.textContent=message; document.body.appendChild(n);
-        setTimeout(()=>n.remove(),2200);
+        n.style.cssText=`background:${type==='error'?'rgba(220,60,60,0.92)':theme().accent};color:${type==='error'?'#fff':(theme().btnText||'#000')};border:1px solid ${type==='error'?'#cc3333':theme().accent};display:flex;align-items:center;gap:10px;`;
+        // несколько уведомлений подряд — складываем стопкой, а не друг на друга
+        n.style.top = (20 + document.querySelectorAll('.nl-notif').length * 52) + 'px';
+        const span=document.createElement('span'); span.textContent=message; n.appendChild(span);
+        if (onUndo) {
+            const btn=document.createElement('button');
+            btn.textContent='↺ Отменить';
+            btn.style.cssText='background:rgba(0,0,0,.15);border:1px solid currentColor;border-radius:3px;padding:2px 9px;cursor:pointer;color:inherit;font:inherit;font-size:11px;flex-shrink:0;';
+            btn.onclick=()=>{ onUndo(); n.remove(); };
+            n.appendChild(btn);
+        }
+        document.body.appendChild(n);
+        setTimeout(()=>n.remove(), onUndo ? 5000 : 2200);
+    }
+
+    // отменяет последнюю вставку шаблона, возвращая прежнее содержимое редактора
+    function undoLastInsert() {
+        const ed = document.querySelector(SEL.editor);
+        if (!ed || lastEditorSnapshot === null) return;
+        ed.innerHTML = lastEditorSnapshot;
+        ['input','keyup','change'].forEach(ev => ed.dispatchEvent(new Event(ev,{bubbles:true})));
+        lastInsertedHTML = ed.innerHTML;
+        lastEditorSnapshot = null;
+        showNotification(theme().dbh ? '⏪ Реконструкция: вставка отменена' : '↺ Вставка отменена', 'success');
+    }
+
+    // предупреждает, если в редакторе уже есть текст, который вставили не мы сами
+    // (textContent, а не innerHTML — у пустого Froala-редактора innerHTML вида '<p><br></p>' не пуст)
+    function confirmOverwriteIfNeeded() {
+        const ed = document.querySelector(SEL.editor);
+        if (ed && ed.textContent.trim() && ed.innerHTML !== lastInsertedHTML) {
+            return confirm('В редакторе уже есть текст — похоже, вы печатали его сами. Заменить его шаблоном?');
+        }
+        return true;
     }
 
     function injectButtons() {
@@ -1937,9 +2729,10 @@
             const wrap=document.createElement('div');
             wrap.id='nl-inline-wrap';
             wrap.style.cssText='display:inline-flex;align-items:center;vertical-align:middle;gap:6px;margin:0 0 0 8px;';
-            wrap.appendChild(mkBtn('nl-btn',       '⬡ NL HELPER',   openMain));
-            wrap.appendChild(mkBtn('nl-bio-btn',   '📋 АНАЛИЗ БИО', openBioAnalyzer));
-            wrap.appendChild(mkBtn('nl-stats-btn', '📊 СТАТИСТИКА',  openStats));
+            wrap.appendChild(mkBtn('nl-btn',        '⬡ NL HELPER',   openMain));
+            wrap.appendChild(mkBtn('nl-wizard-btn', '🧙 РАЗОБРАТЬ',  openWizard));
+            wrap.appendChild(mkBtn('nl-bio-btn',    '📋 АНАЛИЗ БИО', openBioAnalyzer));
+            wrap.appendChild(mkBtn('nl-stats-btn',  '📊 СТАТИСТИКА',  openStats));
             replyBtn.insertAdjacentElement('afterend', wrap);
         } else {
             const panel=document.createElement('div');
@@ -1949,21 +2742,22 @@
                 `background:${hd.bg2}`,`color:${hd.accent}`,
                 `border:1px solid ${hd.accent}`,
                 'clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))',
-                'padding:9px 18px','font-family:Rajdhani,sans-serif',
+                'padding:9px 18px','font-family:var(--nl-font)',
                 'font-size:11px','font-weight:700','letter-spacing:1px',
                 'text-transform:uppercase','cursor:pointer','width:165px',
                 'text-align:center',`box-shadow:0 0 12px ${hd.accent}40`,
-                'transition:all .2s','display:block',
+                'transition:all .15s','display:block',
             ].join(';');
             [
                 ['nl-btn','⬡ NL HELPER',openMain],
+                ['nl-wizard-btn','🧙 РАЗОБРАТЬ',openWizard],
                 ['nl-bio-btn','📋 АНАЛИЗ БИО',openBioAnalyzer],
                 ['nl-stats-btn','📊 СТАТИСТИКА',openStats],
             ].forEach(([id,txt,fn])=>{
                 const b=mkBtn(id,txt,fn);
                 b.removeAttribute('class');
                 b.setAttribute('style',bStyle);
-                b.addEventListener('mouseenter',()=>{b.style.background=hd.accent;b.style.color='#000';});
+                b.addEventListener('mouseenter',()=>{b.style.background=hd.accent;b.style.color=hd.btnText||'#000';});
                 b.addEventListener('mouseleave',()=>{b.style.background=hd.bg2;b.style.color=hd.accent;});
                 panel.appendChild(b);
             });
@@ -1971,38 +2765,45 @@
         }
     }
 
+    let inlineObserver = null;
+
     function tryInlineInsert() {
-        if (document.getElementById('nl-btn')) return;
+        if (document.getElementById('nl-inline-wrap')) { inlineObserver?.disconnect(); return; }
         const replyBtn=findReplyBtn();
         if (!replyBtn||!replyBtn.parentNode) return;
         const floatPanel=document.getElementById('nl-float-panel');
         if (floatPanel) floatPanel.remove();
         injectButtons();
+        inlineObserver?.disconnect();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  ИНИЦИАЛИЗАЦИЯ
-    // ═══════════════════════════════════════════════════════════════
+    // ИНИЦИАЛИЗАЦИЯ
     function init() {
         applyCSS();
         initHotkeys();
         checkFlood();
         injectButtons();
 
-        const ob=new MutationObserver(()=>tryInlineInsert());
-        ob.observe(document.body,{childList:true,subtree:true});
-        setTimeout(()=>ob.disconnect(),15000);
+        inlineObserver = new MutationObserver(()=>tryInlineInsert());
+        inlineObserver.observe(document.body,{childList:true,subtree:true});
+        // подстраховка: если кнопка ответа так и не появится (например, тема закрыта), не наблюдаем вечно
+        setTimeout(()=>inlineObserver?.disconnect(),120000);
 
         if (typeof GM_registerMenuCommand !== 'undefined') {
             GM_registerMenuCommand('NL Helper: Открыть',          openMain);
+            GM_registerMenuCommand('NL Helper: Мастер решений',   openWizard);
             GM_registerMenuCommand('NL Helper: Анализ биографии', openBioAnalyzer);
             GM_registerMenuCommand('NL Helper: Статистика',       openStats);
+            GM_registerMenuCommand('NL Helper: Профиль',          openProfile);
             GM_registerMenuCommand('NL Helper: Сброс шаблонов', ()=>{
                 if (confirm('Сбросить шаблоны?')) { TPLS=deepClone(DEFAULT_TEMPLATES); saveTemplates(); location.reload(); }
             });
         }
 
-        console.log('%c[NL Helper 5.0] ✅ Инициализирован', 'color:#ff6b2b;font-weight:bold');
+        if (theme().dbh) {
+            console.log('%cCYBERLIFE OS · МОДЕЛЬ NL800 · БИОКОМПОНЕНТЫ В НОРМЕ · rA9', 'color:#00a9cc;font-family:monospace;letter-spacing:2px');
+        }
+        console.log('%c[NL Helper 6.2] Инициализирован', 'color:#ff6b2b;font-weight:bold');
     }
 
     if (document.readyState==='loading') {
