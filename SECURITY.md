@@ -23,6 +23,7 @@ We will respond within 48 hours and work on a fix privately.
 - Never transmits user data to external servers
 - Only runs on forum.blackrussia.online
 - Uses only whitelisted Tampermonkey permissions
+- All v6.0 text analysis (complaint wizard, evidence detection, rule matching, curator profile) runs entirely in the browser — no AI services, no external APIs, no new permissions
 
 ### What NL Helper Does NOT Do:
 - ❌ Store passwords or sensitive credentials
@@ -48,7 +49,7 @@ We will respond within 48 hours and work on a fix privately.
 
 2. **Compare with official hash** (published in releases):
    - Visit: https://github.com/nuratropic/nl-helper/releases
-   - Check the v5.1.0 release notes for the correct hash
+   - Check the v6.2.0 release notes for the correct hash
    - If hashes don't match, DO NOT USE THE SCRIPT
 
 3. **Domain Verification**:
