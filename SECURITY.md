@@ -1,127 +1,76 @@
 # 🔒 Security Policy
 
-## Reporting Security Vulnerabilities
+## Reporting a Vulnerability
 
-If you discover a security vulnerability in NL Helper, **please do NOT create a public GitHub issue**. Instead:
+If you discover a security vulnerability in NL Helper, **please do not open a public GitHub issue**. Instead, report it privately:
 
-1. **Email**: Send a detailed report to nurasyl230610@gmail.com
-2. **Subject**: `[SECURITY] NL Helper Vulnerability Report`
-3. **Include**:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Your name and contact info (optional)
+1. **Preferred:** open a private report via [GitHub Security Advisories](https://github.com/nuratropic/nl-helper/security/advisories/new).
+2. **Alternatively:** message [@zhanzun23 on Telegram](https://t.me/zhanzun23) and say it is a security report.
 
-We will respond within 48 hours and work on a fix privately.
+Please include:
+- a description of the vulnerability;
+- steps to reproduce;
+- the potential impact;
+- the script version (shown in the helper window).
 
----
-
-## Security Considerations
-
-### What NL Helper Does:
-- Stores user-created templates locally in browser storage (GM_getValue/GM_setValue)
-- Never transmits user data to external servers
-- Only runs on forum.blackrussia.online
-- Uses only whitelisted Tampermonkey permissions
-- All v6.0 text analysis (complaint wizard, evidence detection, rule matching, curator profile) runs entirely in the browser — no AI services, no external APIs, no new permissions
-
-### What NL Helper Does NOT Do:
-- ❌ Store passwords or sensitive credentials
-- ❌ Send data to external services
-- ❌ Access user's browser history
-- ❌ Modify other websites
-- ❌ Collect personal information
+We will try to reply within a few days and will work on a fix privately. Please don't disclose the issue publicly until a fixed version is released.
 
 ---
 
-## Code Integrity Verification
+## What NL Helper Does
 
-### How to Verify the Script is Unmodified:
+- Runs only on `forum.blackrussia.online` thread pages (`@match`), and additionally checks the hostname at startup, so its logic never executes on other sites even if a userscript manager ignores `@match`.
+- Stores templates, settings, statistics and history locally via `GM_setValue` / `GM_getValue` (isolated per script).
+- Makes network requests **only** to:
+  - `forum.blackrussia.online` itself — to change a thread prefix when you click a prefix button or insert a template, and (if enabled in settings) to read the "server rules" forum listings twice a day to detect rule updates. Requests use your existing forum session; nothing is sent to third parties.
+  - Google Fonts (`fonts.googleapis.com`) — to load interface fonts the first time a helper window opens.
+- All text analysis (complaint wizard, evidence detection, rule matching, biography check, curator profile) runs entirely in the browser — no AI services or external APIs.
+- Uses only the `GM_setValue`, `GM_getValue`, `GM_deleteValue` and `GM_registerMenuCommand` grants.
 
-1. **Get SHA-256 hash of official script**:
-   ```bash
-   # On Linux/Mac
-   sha256sum nl_helper.js
-   
-   # On Windows (PowerShell)
-   Get-FileHash nl_helper.js -Algorithm SHA256
-   ```
+### What NL Helper Does Not Do
 
-2. **Compare with official hash** (published in releases):
-   - Visit: https://github.com/nuratropic/nl-helper/releases
-   - Check the v6.2.0 release notes for the correct hash
-   - If hashes don't match, DO NOT USE THE SCRIPT
-
-3. **Domain Verification**:
-   - Script will only load on `forum.blackrussia.online`
-   - If you're on a different domain, the script will refuse to run
-   - This is intentional protection against phishing/spoofing
+- ❌ Store passwords or credentials
+- ❌ Send your data to external services, telemetry or analytics
+- ❌ Access browser history or other sites
+- ❌ Insert raw HTML from templates into the page — text inserted into the editor and shown in previews is escaped, and only `https://` links are allowed in post images
 
 ---
 
-## Known Security Features
+## Verifying the Script
 
-### Domain Whitelisting ✅
-```javascript
-// Script only runs on official forum domain
-if (window.location.hostname !== 'forum.blackrussia.online') {
-    return;
-}
+The script installed from [Greasy Fork](https://greasyfork.org/en/scripts/582289-nl-helper) is built from the `src/` folder of this repository. To check that a copy matches a release:
+
+```bash
+# Linux / macOS
+sha256sum nl_helper.js
+
+# Windows (PowerShell)
+Get-FileHash nl_helper.js -Algorithm SHA256
 ```
-This runs in addition to the `@match`/`@include` rules in the userscript header, so the script's logic never executes even if a userscript manager is configured to ignore those rules.
 
-### No External Communications ✅
-- All data stored locally in browser
-- No API calls to unknown servers
-- No telemetry or analytics
-
-### Storage Isolation ✅
-- Data stored with `GM_setValue` is isolated per script
-- Cannot access data from other scripts
-- Cannot access browser cookies
+Compare the hash with the one published in the notes of the corresponding [release](https://github.com/nuratropic/nl-helper/releases). You can also rebuild the file yourself with `npm run build` and compare (`npm run check`).
 
 ---
 
-## Responsible Disclosure
+## Updates
 
-### If You Find a Bug:
-1. For **non-security bugs**: Use GitHub Issues
-2. For **security issues**: Email privately (no public disclosure until fix is released)
-3. For **code theft/misuse**: Report to GitHub DMCA team
-
----
-
-## Updates & Patches
-
-- Security patches will be released ASAP (within 24-48 hours)
-- Major version bumps (e.g., 5.0.0 → 6.0.0) indicate breaking changes
-- Patch versions (e.g., 5.0.0 → 5.0.1) indicate security/bug fixes
-- Check [Releases](https://github.com/nuratropic/nl-helper/releases) for updates
+- Security fixes are released as soon as possible as a patch version.
+- Tampermonkey updates the script automatically from Greasy Fork.
+- See [CHANGELOG.md](./CHANGELOG.md) for what changed in each version.
 
 ---
 
-## Legal Protection
+## License
 
-This script is protected by:
-- **MIT License** — Clear terms of use
-- **Copyright © 2024** — Protects original code
-- **DMCA Notice** — Against unauthorized use
-- **Terms of Service** — Binding agreement
-
-Misuse of this code may result in:
-- DMCA takedown notices
-- Legal action (civil/criminal)
-- Account bans on the forum
+NL Helper is distributed under the [MIT License](./LICENSE). You may use, modify and redistribute it, provided the copyright notice and license text are kept.
 
 ---
 
-## Questions?
+## Contacts
 
-For security questions: nurasyl230610@gmail.com
-For bug reports: [GitHub Issues](https://github.com/nuratropic/nl-helper/issues)
-For general support: [Telegram @zhanzun23](https://t.me/zhanzun23) or [Forum](https://forum.blackrussia.online/members/nicki_lachowski.2210536/)
+- Security reports: [GitHub Security Advisories](https://github.com/nuratropic/nl-helper/security/advisories/new) or [Telegram @zhanzun23](https://t.me/zhanzun23)
+- Bug reports: [GitHub Issues](https://github.com/nuratropic/nl-helper/issues)
+- Forum: [Nicki_Lachowski](https://forum.blackrussia.online/members/nicki_lachowski.2210536/)
 
----
-
-**Last Updated**: July 2026
+**Last Updated**: November 2026
 **Maintained by**: Nicki_Lachowski

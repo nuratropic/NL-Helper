@@ -1,0 +1,15 @@
+{
+  "version": 5,
+  "data": {
+    "players": [
+      { "id": "p3", "title": "Отказано — нарушений нет", "prefix": 4, "tags": "", "content": "МОЯ ПРАВКА p3", "isPinned": false, "isNew": false, "uses": 0 },
+      { "id": "p16_a", "title": "Одобрено — Помеха работе [2.04]", "prefix": 8, "isRaw": true, "tags": "игроки, жалоба, одобрено, пункт 2.04", "content": "[SPOILER=\"Посмотреть пункт правил\"]2.04. Запрещены действия, создающие помехи в игровом процессе или выполнении работ | Ban 10 дней[/SPOILER]", "isPinned": false, "isNew": false, "uses": 11 }
+    ],
+    "rp_bio": [
+      { "id": "rb2", "title": "На доработку — слишком короткая", "prefix": 2, "tags": "", "content": "Ваша РП-биография взята на проверку, однако требует доработки.\nБиография слишком короткая.", "isPinned": true, "isNew": false, "uses": 3 }
+    ],
+    "custom": [
+      { "id": "u777", "title": "Кастом 6.2", "prefix": 4, "tags": "x", "content": "abc", "isPinned": false, "isNew": true, "uses": 5 }
+    ]
+  }
+}
