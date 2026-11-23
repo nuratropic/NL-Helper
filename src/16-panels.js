@@ -16,7 +16,7 @@
         mountDialog(pk);
         pk.querySelectorAll('.nl-hi').forEach(i=>{
             i.onclick=()=>{
-                curTheme=i.dataset.k; GM_setValue(STORAGE.THEME,curTheme); pk.remove(); applyCSS();
+                curTheme=i.dataset.k; gm.set(STORAGE.THEME,curTheme); pk.remove(); applyCSS();
                 // кнопки на форуме (и плавающая панель) стилизованы через CSS — достаточно applyCSS
                 closeMain(); setTimeout(openMain,50);
             };

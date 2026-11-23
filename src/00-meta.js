@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NL Helper
 // @namespace    https://forum.blackrussia.online
-// @version      6.4.0
+// @version      6.4.1
 // @description  Профессиональный помощник куратора форума Black Russia
 // @author       Nicki_Lachowski
 // @homepageURL  https://github.com/nuratropic/nl-helper

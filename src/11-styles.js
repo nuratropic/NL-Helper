@@ -477,6 +477,27 @@
 .nl-dock .nl-grid { grid-template-columns:1fr; }
 .nl-dock .nl-ft { padding:10px 12px; gap:8px; }
 
+/* ── Телефон: всё в одну колонку, крупнее зоны нажатия ── */
+@media (max-width: 759px) {
+    .nl-ov.nl-dock { width:100vw; }
+    .nl-dock .nl-m { border-left:none; }
+    .nl-dock .nl-sb-foot .nl-hb { flex:1 1 30%; }
+    .nl-dov { align-items:flex-start; padding:8px 0; overflow-y:auto; }
+    .nl-dbox { padding:14px; gap:12px; max-height:none; width:auto !important; max-width:calc(100vw - 16px); }
+    .nl-wiz-cat { grid-template-columns:1fr; }
+    .nl-prof-ach { grid-template-columns:repeat(3,1fr); }
+    .nl-set-row { flex-wrap:wrap; gap:8px; }
+    .nl-da { flex-wrap:wrap; }
+    .nl-cmd-ov { padding-top:4vh; }
+    .nl-tooltip { display:none; }
+    .nl-card:hover { transform:none; }
+    .nl-btn, .nl-hb, .nl-tab, .nl-pp, .nl-rb-row { min-height:40px; }
+    #nl-inline-wrap { margin:6px 0 0 !important; }
+    #nl-float-panel { bottom:10px; right:10px; }
+    #nl-float-panel .nl-btn-main { width:150px; }
+    #nl-rules-banner { left:8px; right:8px; bottom:8px; max-width:none; }
+}
+
 /* ── Плавающая панель (если кнопки «Ответить» нет) ── */
 #nl-float-panel { position:fixed; bottom:20px; right:20px; z-index:2147483000; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
 #nl-float-panel .nl-btn-main { background:${hd.bg2} !important; width:165px; justify-content:center !important; margin:0 !important; }

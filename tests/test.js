@@ -10,12 +10,16 @@ const root = path.resolve(__dirname, '..');
 const code = fs.readFileSync(path.join(root, 'nl_helper.js'), 'utf8');
 
 // минимальное окружение: GM_* поверх объекта, «страница» темы без DOM (init не запускается)
-function run(store, pathname = '/threads/test-2.01-zhaloba.12345/page-2') {
+// noGM = true — как в менеджерах без синхронного GM_* API (Userscripts на iPhone): данные в localStorage
+function run(store, pathname = '/threads/test-2.01-zhaloba.12345/page-2', noGM = false) {
+    const ls = noGM ? store : {};
     const env = {
         console: { log() {}, warn() {}, error() {} },
-        GM_getValue: k => store[k], GM_setValue: (k, v) => { store[k] = v; }, GM_deleteValue: k => { delete store[k]; },
-        GM_registerMenuCommand: () => {},
-        localStorage: { getItem: () => null, removeItem: () => {} },
+        ...(noGM ? {} : {
+            GM_getValue: k => store[k], GM_setValue: (k, v) => { store[k] = v; }, GM_deleteValue: k => { delete store[k]; },
+            GM_registerMenuCommand: () => {},
+        }),
+        localStorage: { getItem: k => (k in ls ? ls[k] : null), setItem: (k, v) => { ls[k] = String(v); }, removeItem: k => { delete ls[k]; } },
         document: { readyState: 'loading', addEventListener: () => {}, querySelector: () => null, querySelectorAll: () => [] },
         window: { location: { hostname: 'forum.blackrussia.online', pathname, href: 'https://forum.blackrussia.online' + pathname } },
     };
@@ -115,6 +119,19 @@ section('Устойчивость');
 let T3;
 try { T3 = run({ nl_tpl_v6: '{not json', nl_set_v5: '[[[', nl_stats_v5: 'null', nl_hist_v5: '{"a":1}' }); } catch (e) { /* упало */ }
 ok(T3 && T3.TPLS.players.length > 100, 'повреждённое хранилище не ломает запуск');
+
+section('Без GM_* (Userscripts на iPhone): данные в localStorage');
+const lsStore = {};
+let T4;
+try { T4 = run(lsStore, undefined, true); } catch (e) { console.log('    ' + e.message); }
+ok(!!T4, 'скрипт запускается без GM_getValue/GM_setValue');
+if (T4) {
+    T4.TPLS.players.find(x => x.id === 'p3').uses = 4;
+    T4.saveTemplates();
+    ok(typeof lsStore.nl_tpl_v6 === 'string', 'шаблоны сохраняются в localStorage');
+    const T5 = run(lsStore, undefined, true);
+    ok(T5.TPLS.players.find(x => x.id === 'p3').uses === 4, 'и читаются после перезагрузки');
+}
 
 console.log(failed ? `\n✗ Провалено: ${failed}` : '\n✓ Все тесты пройдены');
 process.exit(failed ? 1 : 0);

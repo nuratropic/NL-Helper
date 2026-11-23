@@ -3,7 +3,7 @@
     let SETS     = loadSettings();
     let STATS    = loadStats();
     let HIST     = loadHistory();
-    let curTheme = GM_getValue(STORAGE.THEME) || 'amber';
+    let curTheme = gm.get(STORAGE.THEME) || 'amber';
     let curTab   = 'players';
     let manageMode = false;
     let floodIv  = null;
@@ -14,7 +14,7 @@
 
     const theme = () => {
         const t = THEMES[curTheme];
-        if (!t) { curTheme = 'amber'; GM_setValue(STORAGE.THEME, 'amber'); return THEMES.amber; }
+        if (!t) { curTheme = 'amber'; gm.set(STORAGE.THEME, 'amber'); return THEMES.amber; }
         return t;
     };
 

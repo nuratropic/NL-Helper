@@ -3,7 +3,8 @@
     // внутренняя разметка и вся логика (renderCards/bindMain) общие, различается только контейнер
     function openMain() {
         if (document.querySelector('.nl-ov')) return;
-        const dock = SETS.uiMode === 'dock';
+        // на телефоне (узкий экран) окно по центру не помещается — открываем панелью во всю ширину
+        const dock = SETS.uiMode === 'dock' || isNarrow();
         if (!dock) document.body.style.overflow = 'hidden';
         // при первом открытии на странице — вкладка по разделу форума (жалобы на игроков → «Игроки» и т.д.)
         const section = detectSection();
@@ -90,7 +91,9 @@
             closeMain(); openMain();
         };
         // клик по подложке закрывает только модальное окно; у док-панели подложки нет
-        ov.onclick = e => { if (e.target===ov && SETS.uiMode!=='dock') closeMain(); };
+        ov.onclick = e => { if (e.target===ov && !ov.classList.contains('nl-dock')) closeMain(); };
+        // на телефоне переключать «окно/панель» бессмысленно — кнопку прячем
+        if (isNarrow()) ov.querySelector('#nl-mode-toggle').style.display = 'none';
 
         ov.querySelectorAll('.nl-tab').forEach(t => {
             t.onclick = () => {

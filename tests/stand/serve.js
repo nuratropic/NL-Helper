@@ -28,7 +28,7 @@ function crumbs(section) {
 function page(kind) {
     const p = pages[kind];
     const start = Math.floor(Date.now() / 1000) - p.ageH * 3600;
-    return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${p.title} | Тест</title>
+    return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${p.title} | Тест</title>
 <style>body{background:#1b1b1b;color:#ddd;font:14px sans-serif;padding:20px;min-height:900px} .fr-element{min-height:120px;border:1px solid #555;padding:8px;background:#222} .label{background:#c33;padding:2px 6px;margin-right:6px} .p-breadcrumbs{list-style:none;display:flex;gap:8px;padding:0;font-size:12px} .p-breadcrumbs li:after{content:' ›'} a{color:#8ab}</style></head><body>
 <div class="p-navgroup"><a class="p-navgroup-link p-navgroup-link--user" href="/account/"><span class="p-navgroup-linkText">Curator_Test</span></a></div>
 ${crumbs(p.section)}
@@ -46,7 +46,10 @@ window.__store = JSON.parse(sessionStorage.getItem('__store') || '{}'); window._
 const _f = window.fetch;
 window.fetch = (u, o) => { if (String(u).includes('/edit')) { window.__posts.push({ u: String(u), body: Object.fromEntries(o.body.entries()) }); return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { headers: { 'Content-Type': 'application/json' } })); } return _f(u, o); };
 const persist = () => sessionStorage.setItem('__store', JSON.stringify(window.__store));
+// ?nogm в адресе — как менеджер без GM_* (Userscripts на iPhone): скрипт должен работать через localStorage
+if (!location.search.includes('nogm')) {
 window.GM_getValue = k => window.__store[k]; window.GM_setValue = (k, v) => { window.__store[k] = v; persist(); }; window.GM_deleteValue = k => { delete window.__store[k]; persist(); }; window.GM_registerMenuCommand = () => {};
+}
 </script>
 <script src="/nl_helper.js"></script></body></html>`;
 }

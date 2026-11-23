@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NL Helper
 // @namespace    https://forum.blackrussia.online
-// @version      6.4.0
+// @version      6.4.1
 // @description  Профессиональный помощник куратора форума Black Russia
 // @author       Nicki_Lachowski
 // @homepageURL  https://github.com/nuratropic/nl-helper
@@ -27,7 +27,7 @@
     if (window.__NL_HELPER__) return; // защита от двойного запуска (две копии скрипта / SPA-переход)
     window.__NL_HELPER__ = true;
 
-    const VERSION = '6.4.0';
+    const VERSION = '6.4.1';
     // дата редакции «Общих правил серверов», с которой сверена таблица RULE_TABLE
     const RULES_REVISION = '14.11.2026';
 
@@ -51,10 +51,24 @@
     const MAX_CUSTOM      = 50;
     const MAX_HISTORY     = 30;
 
-    // безопасное чтение JSON из GM-хранилища: битые данные не должны ронять весь скрипт
+    // ОБЁРТКА ХРАНИЛИЩА. Tampermonkey и Violentmonkey (компьютер, Android) дают синхронные
+    // GM_getValue/GM_setValue. Некоторые менеджеры на iPhone (например, бесплатный Userscripts
+    // для Safari) их не дают — тогда храним данные в localStorage форума, а остальной код не меняется.
+    const HAS_GM = typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+    const gm = HAS_GM ? {
+        get: k => GM_getValue(k),
+        set: (k, v) => GM_setValue(k, v),
+        del: k => (typeof GM_deleteValue === 'function' ? GM_deleteValue(k) : GM_setValue(k, undefined)),
+    } : {
+        get(k) { try { const v = localStorage.getItem(k); return v === null ? undefined : v; } catch (e) { return undefined; } },
+        set(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) { /* хранилище недоступно */ } },
+        del(k) { try { localStorage.removeItem(k); } catch (e) { /* хранилище недоступно */ } },
+    };
+
+    // безопасное чтение JSON из хранилища: битые данные не должны ронять весь скрипт
     function readJSON(key, fallback) {
         try {
-            const raw = GM_getValue(key);
+            const raw = gm.get(key);
             if (raw === undefined || raw === null || raw === '') return fallback;
             return typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (e) {
@@ -63,18 +77,19 @@
         }
     }
     function writeJSON(key, val) {
-        try { GM_setValue(key, JSON.stringify(val)); }
+        try { gm.set(key, JSON.stringify(val)); }
         catch (e) { console.error('[NL Helper] не удалось сохранить', key, e); }
     }
 
     // одноразовый перенос данных из localStorage (версии до 5.0.1) в изолированное GM_* хранилище
     (function migrateFromLocalStorage() {
+        if (!HAS_GM) return; // без GM_* данные и так живут в localStorage
         try {
             [...Object.values(STORAGE), LEGACY_TEMPLATES].forEach(key => {
-                if (GM_getValue(key) !== undefined) return;
+                if (gm.get(key) !== undefined) return;
                 const old = localStorage.getItem(key);
                 if (old === null) return;
-                GM_setValue(key, old);
+                gm.set(key, old);
                 localStorage.removeItem(key);
             });
         } catch (e) { /* localStorage может быть недоступен — не критично */ }
@@ -570,7 +585,7 @@
     let SETS     = loadSettings();
     let STATS    = loadStats();
     let HIST     = loadHistory();
-    let curTheme = GM_getValue(STORAGE.THEME) || 'amber';
+    let curTheme = gm.get(STORAGE.THEME) || 'amber';
     let curTab   = 'players';
     let manageMode = false;
     let floodIv  = null;
@@ -581,7 +596,7 @@
 
     const theme = () => {
         const t = THEMES[curTheme];
-        if (!t) { curTheme = 'amber'; GM_setValue(STORAGE.THEME, 'amber'); return THEMES.amber; }
+        if (!t) { curTheme = 'amber'; gm.set(STORAGE.THEME, 'amber'); return THEMES.amber; }
         return t;
     };
 
@@ -767,6 +782,8 @@
     }
 
     // УТИЛИТЫ
+    // телефон / узкое окно: интерфейс перестраивается в одну колонку
+    function isNarrow() { return (window.innerWidth || 1024) < 760; }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function fmtDate(d) { return new Date(d).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'}); }
     function fmtTime(d) { return new Date(d).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}); }
@@ -1156,9 +1173,9 @@
     function doFlood(txt) {
         const m = txt.match(/(\d+)\s*(секунд|сек|минут|мин)/i); if (!m) return;
         let s = parseInt(m[1]); if (/мин/i.test(m[2])) s *= 60;
-        GM_setValue(STORAGE.FLOOD, Date.now() + s * 1000);
+        gm.set(STORAGE.FLOOD, Date.now() + s * 1000);
         const ed = document.querySelector(SEL.editor);
-        GM_setValue(STORAGE.PENDING, ed ? ed.innerHTML : '');
+        gm.set(STORAGE.PENDING, ed ? ed.innerHTML : '');
         floodTimer(s);
     }
     function floodTimer(secs) {
@@ -1169,18 +1186,18 @@
         floodIv = setInterval(() => {
             t--; up();
             if (t <= 0) {
-                clearInterval(floodIv); floodIv = null; GM_deleteValue(STORAGE.FLOOD);
+                clearInterval(floodIv); floodIv = null; gm.del(STORAGE.FLOOD);
                 b.classList.remove('nl-fa'); if (sp) sp.textContent = og;
-                const pd = GM_getValue(STORAGE.PENDING);
-                if (pd) { const ed = document.querySelector(SEL.editor); if (ed) { ed.innerHTML = pd; ed.dispatchEvent(new Event('input', { bubbles: true })); } GM_deleteValue(STORAGE.PENDING); }
+                const pd = gm.get(STORAGE.PENDING);
+                if (pd) { const ed = document.querySelector(SEL.editor); if (ed) { ed.innerHTML = pd; ed.dispatchEvent(new Event('input', { bubbles: true })); } gm.del(STORAGE.PENDING); }
                 if (SETS.autoSubmit) setTimeout(clickSubmit, 500);
             }
         }, 1000);
     }
     function checkFlood() {
-        const tg = parseInt(GM_getValue(STORAGE.FLOOD)); if (!tg) return;
+        const tg = parseInt(gm.get(STORAGE.FLOOD)); if (!tg) return;
         const r = Math.ceil((tg - Date.now()) / 1000);
-        if (r > 0 && r < 3600) floodTimer(r); else GM_deleteValue(STORAGE.FLOOD);
+        if (r > 0 && r < 3600) floodTimer(r); else gm.del(STORAGE.FLOOD);
     }
 
     // СТАТИСТИКА
@@ -1725,6 +1742,27 @@
 .nl-dock .nl-grid { grid-template-columns:1fr; }
 .nl-dock .nl-ft { padding:10px 12px; gap:8px; }
 
+/* ── Телефон: всё в одну колонку, крупнее зоны нажатия ── */
+@media (max-width: 759px) {
+    .nl-ov.nl-dock { width:100vw; }
+    .nl-dock .nl-m { border-left:none; }
+    .nl-dock .nl-sb-foot .nl-hb { flex:1 1 30%; }
+    .nl-dov { align-items:flex-start; padding:8px 0; overflow-y:auto; }
+    .nl-dbox { padding:14px; gap:12px; max-height:none; width:auto !important; max-width:calc(100vw - 16px); }
+    .nl-wiz-cat { grid-template-columns:1fr; }
+    .nl-prof-ach { grid-template-columns:repeat(3,1fr); }
+    .nl-set-row { flex-wrap:wrap; gap:8px; }
+    .nl-da { flex-wrap:wrap; }
+    .nl-cmd-ov { padding-top:4vh; }
+    .nl-tooltip { display:none; }
+    .nl-card:hover { transform:none; }
+    .nl-btn, .nl-hb, .nl-tab, .nl-pp, .nl-rb-row { min-height:40px; }
+    #nl-inline-wrap { margin:6px 0 0 !important; }
+    #nl-float-panel { bottom:10px; right:10px; }
+    #nl-float-panel .nl-btn-main { width:150px; }
+    #nl-rules-banner { left:8px; right:8px; bottom:8px; max-width:none; }
+}
+
 /* ── Плавающая панель (если кнопки «Ответить» нет) ── */
 #nl-float-panel { position:fixed; bottom:20px; right:20px; z-index:2147483000; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
 #nl-float-panel .nl-btn-main { background:${hd.bg2} !important; width:165px; justify-content:center !important; margin:0 !important; }
@@ -1817,7 +1855,8 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
     // внутренняя разметка и вся логика (renderCards/bindMain) общие, различается только контейнер
     function openMain() {
         if (document.querySelector('.nl-ov')) return;
-        const dock = SETS.uiMode === 'dock';
+        // на телефоне (узкий экран) окно по центру не помещается — открываем панелью во всю ширину
+        const dock = SETS.uiMode === 'dock' || isNarrow();
         if (!dock) document.body.style.overflow = 'hidden';
         // при первом открытии на странице — вкладка по разделу форума (жалобы на игроков → «Игроки» и т.д.)
         const section = detectSection();
@@ -1904,7 +1943,9 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
             closeMain(); openMain();
         };
         // клик по подложке закрывает только модальное окно; у док-панели подложки нет
-        ov.onclick = e => { if (e.target===ov && SETS.uiMode!=='dock') closeMain(); };
+        ov.onclick = e => { if (e.target===ov && !ov.classList.contains('nl-dock')) closeMain(); };
+        // на телефоне переключать «окно/панель» бессмысленно — кнопку прячем
+        if (isNarrow()) ov.querySelector('#nl-mode-toggle').style.display = 'none';
 
         ov.querySelectorAll('.nl-tab').forEach(t => {
             t.onclick = () => {
@@ -2763,7 +2804,7 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
         mountDialog(pk);
         pk.querySelectorAll('.nl-hi').forEach(i=>{
             i.onclick=()=>{
-                curTheme=i.dataset.k; GM_setValue(STORAGE.THEME,curTheme); pk.remove(); applyCSS();
+                curTheme=i.dataset.k; gm.set(STORAGE.THEME,curTheme); pk.remove(); applyCSS();
                 // кнопки на форуме (и плавающая панель) стилизованы через CSS — достаточно applyCSS
                 closeMain(); setTimeout(openMain,50);
             };

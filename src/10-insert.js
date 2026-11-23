@@ -173,9 +173,9 @@
     function doFlood(txt) {
         const m = txt.match(/(\d+)\s*(секунд|сек|минут|мин)/i); if (!m) return;
         let s = parseInt(m[1]); if (/мин/i.test(m[2])) s *= 60;
-        GM_setValue(STORAGE.FLOOD, Date.now() + s * 1000);
+        gm.set(STORAGE.FLOOD, Date.now() + s * 1000);
         const ed = document.querySelector(SEL.editor);
-        GM_setValue(STORAGE.PENDING, ed ? ed.innerHTML : '');
+        gm.set(STORAGE.PENDING, ed ? ed.innerHTML : '');
         floodTimer(s);
     }
     function floodTimer(secs) {
@@ -186,18 +186,18 @@
         floodIv = setInterval(() => {
             t--; up();
             if (t <= 0) {
-                clearInterval(floodIv); floodIv = null; GM_deleteValue(STORAGE.FLOOD);
+                clearInterval(floodIv); floodIv = null; gm.del(STORAGE.FLOOD);
                 b.classList.remove('nl-fa'); if (sp) sp.textContent = og;
-                const pd = GM_getValue(STORAGE.PENDING);
-                if (pd) { const ed = document.querySelector(SEL.editor); if (ed) { ed.innerHTML = pd; ed.dispatchEvent(new Event('input', { bubbles: true })); } GM_deleteValue(STORAGE.PENDING); }
+                const pd = gm.get(STORAGE.PENDING);
+                if (pd) { const ed = document.querySelector(SEL.editor); if (ed) { ed.innerHTML = pd; ed.dispatchEvent(new Event('input', { bubbles: true })); } gm.del(STORAGE.PENDING); }
                 if (SETS.autoSubmit) setTimeout(clickSubmit, 500);
             }
         }, 1000);
     }
     function checkFlood() {
-        const tg = parseInt(GM_getValue(STORAGE.FLOOD)); if (!tg) return;
+        const tg = parseInt(gm.get(STORAGE.FLOOD)); if (!tg) return;
         const r = Math.ceil((tg - Date.now()) / 1000);
-        if (r > 0 && r < 3600) floodTimer(r); else GM_deleteValue(STORAGE.FLOOD);
+        if (r > 0 && r < 3600) floodTimer(r); else gm.del(STORAGE.FLOOD);
     }
 
     // СТАТИСТИКА

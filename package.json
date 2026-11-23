@@ -1,6 +1,6 @@
 {
   "name": "nl-helper",
-  "version": "6.4.0",
+  "version": "6.4.1",
   "private": true,
   "description": "Tampermonkey-помощник куратора форума Black Russia",
   "license": "MIT",

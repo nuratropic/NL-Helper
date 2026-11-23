@@ -6,7 +6,7 @@
     if (window.__NL_HELPER__) return; // защита от двойного запуска (две копии скрипта / SPA-переход)
     window.__NL_HELPER__ = true;
 
-    const VERSION = '6.4.0';
+    const VERSION = '6.4.1';
     // дата редакции «Общих правил серверов», с которой сверена таблица RULE_TABLE
     const RULES_REVISION = '14.11.2026';
 
@@ -30,10 +30,24 @@
     const MAX_CUSTOM      = 50;
     const MAX_HISTORY     = 30;
 
-    // безопасное чтение JSON из GM-хранилища: битые данные не должны ронять весь скрипт
+    // ОБЁРТКА ХРАНИЛИЩА. Tampermonkey и Violentmonkey (компьютер, Android) дают синхронные
+    // GM_getValue/GM_setValue. Некоторые менеджеры на iPhone (например, бесплатный Userscripts
+    // для Safari) их не дают — тогда храним данные в localStorage форума, а остальной код не меняется.
+    const HAS_GM = typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+    const gm = HAS_GM ? {
+        get: k => GM_getValue(k),
+        set: (k, v) => GM_setValue(k, v),
+        del: k => (typeof GM_deleteValue === 'function' ? GM_deleteValue(k) : GM_setValue(k, undefined)),
+    } : {
+        get(k) { try { const v = localStorage.getItem(k); return v === null ? undefined : v; } catch (e) { return undefined; } },
+        set(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) { /* хранилище недоступно */ } },
+        del(k) { try { localStorage.removeItem(k); } catch (e) { /* хранилище недоступно */ } },
+    };
+
+    // безопасное чтение JSON из хранилища: битые данные не должны ронять весь скрипт
     function readJSON(key, fallback) {
         try {
-            const raw = GM_getValue(key);
+            const raw = gm.get(key);
             if (raw === undefined || raw === null || raw === '') return fallback;
             return typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (e) {
@@ -42,18 +56,19 @@
         }
     }
     function writeJSON(key, val) {
-        try { GM_setValue(key, JSON.stringify(val)); }
+        try { gm.set(key, JSON.stringify(val)); }
         catch (e) { console.error('[NL Helper] не удалось сохранить', key, e); }
     }
 
     // одноразовый перенос данных из localStorage (версии до 5.0.1) в изолированное GM_* хранилище
     (function migrateFromLocalStorage() {
+        if (!HAS_GM) return; // без GM_* данные и так живут в localStorage
         try {
             [...Object.values(STORAGE), LEGACY_TEMPLATES].forEach(key => {
-                if (GM_getValue(key) !== undefined) return;
+                if (gm.get(key) !== undefined) return;
                 const old = localStorage.getItem(key);
                 if (old === null) return;
-                GM_setValue(key, old);
+                gm.set(key, old);
                 localStorage.removeItem(key);
             });
         } catch (e) { /* localStorage может быть недоступен — не критично */ }

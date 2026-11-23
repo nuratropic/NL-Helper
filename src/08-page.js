@@ -1,4 +1,6 @@
     // УТИЛИТЫ
+    // телефон / узкое окно: интерфейс перестраивается в одну колонку
+    function isNarrow() { return (window.innerWidth || 1024) < 760; }
     function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function fmtDate(d) { return new Date(d).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'}); }
     function fmtTime(d) { return new Date(d).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}); }

@@ -2,6 +2,13 @@
 
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [6.4.1] — 2026-11-23
+
+### Добавлено
+- Работа на iPhone через Userscripts (Safari): если менеджер не даёт `GM_getValue/GM_setValue`, данные хранятся в localStorage форума.
+- Вид для телефона: окно на весь экран, крупные кнопки, диалоги в одну колонку.
+- Пошаговая инструкция установки для компьютера, Android и iPhone — [docs/INSTALL.md](./docs/INSTALL.md).
+
 ## [6.4.0] — 2026-11-23
 
 ### Добавлено
