@@ -14,6 +14,13 @@
                         <label class="nl-cl2"><input type="checkbox" id="s-hk" ${draft.hotkeys ? 'checked' : ''}></label>
                     </div>
                     <div class="nl-set-row">
+                        <div><div class="nl-set-label">Стиль поста</div><div class="nl-set-desc">«Detroit» — интерфейс андроида: баннер статуса, пункты правил в цитате, «Задача выполнена». «Классика» — прежнее оформление с узорами</div></div>
+                        <select class="nl-sel" id="s-poststyle" style="width:150px">
+                            <option value="detroit"${draft.postStyle !== 'classic' ? ' selected' : ''}>Detroit</option>
+                            <option value="classic"${draft.postStyle === 'classic' ? ' selected' : ''}>Классика</option>
+                        </select>
+                    </div>
+                    <div class="nl-set-row">
                         <div><div class="nl-set-label">Режим отображения</div><div class="nl-set-desc">«Панель сбоку» — помощник открывается справа, тема форума остаётся видна</div></div>
                         <select class="nl-sel" id="s-uimode" style="width:150px">
                             <option value="modal"${draft.uiMode !== 'dock' ? ' selected' : ''}>Окно</option>
@@ -81,6 +88,7 @@
         mountDialog(ov);
         ov.querySelector('#s-hk').onchange = e => { draft.hotkeys = e.target.checked; };
         ov.querySelector('#s-uimode').onchange = e => { draft.uiMode = e.target.value; };
+        ov.querySelector('#s-poststyle').onchange = e => { draft.postStyle = e.target.value; };
         ov.querySelector('#s-min').oninput = e => { draft.minBioWords = parseInt(e.target.value) || BIO_RULES.minWords; };
         ov.querySelector('#s-max').oninput = e => { draft.maxBioWords = parseInt(e.target.value) || BIO_RULES.maxWords; };
         ov.querySelectorAll('input[data-k]').forEach(cb => { cb.onchange = () => { draft[cb.dataset.k] = cb.checked; }; });
@@ -92,9 +100,9 @@
         };
         ov.querySelector('#s-post-pv').onclick = () => {
             // предпросмотр с черновыми настройками, не сохраняя их
-            const saved = SETS.post; SETS.post = draft.post;
-            try { showPreview(wrapPost(mentionOf(getAuthor()), serverName(), '[SIZE=6][COLOR=rgb(255,255,255)][I]Текст ответа куратора.[/I][/COLOR][/SIZE]')); }
-            finally { SETS.post = saved; }
+            const saved = SETS.post, savedStyle = SETS.postStyle; SETS.post = draft.post; SETS.postStyle = draft.postStyle;
+            try { showPreview(wrapPost(mentionOf(getAuthor()), serverName(), isDetroit() ? '[COLOR=' + DBH.text + ']Текст ответа куратора.[/COLOR]' : '[SIZE=6][COLOR=rgb(255,255,255)][I]Текст ответа куратора.[/I][/COLOR][/SIZE]', P.ACCEPT)); }
+            finally { SETS.post = saved; SETS.postStyle = savedStyle; }
         };
         const list = ov.querySelector('#s-mg-list');
         const refreshTags = () => { list.innerHTML = renderTags(); };

@@ -98,3 +98,18 @@
         signature:  'Администрация сервера',
     };
 
+    // СТИЛЬ «DETROIT» («чертоги разума»): баннеры нарисованы в docs/design/generate-dbh2.html
+    const DBH_IMG = {
+        header:   'https://i.postimg.cc/QdQnbyr6/dbh2-header.png',
+        divider:  'https://i.postimg.cc/SQP5N9r1/dbh2-divider.png',
+        complete: 'https://i.postimg.cc/W47C2fWk/dbh2-complete.png',
+        approved: 'https://i.postimg.cc/Kjjdpr5N/dbh2-approved.png',
+        denied:   'https://i.postimg.cc/9M8k9wjc/dbh2-denied.png',
+        review:   'https://i.postimg.cc/KzH9jXnR/dbh2-review.png',
+        resolved: 'https://i.postimg.cc/s23H04jD/dbh2-resolved.png',
+        closed:   'https://i.postimg.cc/4NrrwcH5/dbh2-closed.png',
+    };
+    // цвета текста в стиле Detroit (как на баннерах)
+    const DBH = { text: 'rgb(232,236,238)', dim: 'rgb(154,163,170)', white: 'rgb(245,247,248)', blue: 'rgb(47,143,232)',
+        red: 'rgb(229,57,74)', yellow: 'rgb(242,194,48)', gray: 'rgb(141,150,157)' };
+

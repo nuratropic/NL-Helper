@@ -8,7 +8,7 @@
 
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-установить-e3792d?style=flat-square)](https://greasyfork.org/en/scripts/582289-nl-helper)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-обязателен-38b6ff?style=flat-square)](https://www.tampermonkey.net/)
-[![Version](https://img.shields.io/badge/версия-6.4.1-333333?style=flat-square)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/версия-6.5.0-333333?style=flat-square)](./CHANGELOG.md)
 [![Правила](https://img.shields.io/badge/правила-от%2014.11.2026-61bd6d?style=flat-square)](https://forum.blackrussia.online/categories/%D0%9F%D1%80%D0%B0%D0%B2%D0%B8%D0%BB%D0%B0-%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%BE%D0%B2.50/)
 [![CI](https://github.com/nuratropic/nl-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/nuratropic/nl-helper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-informational?style=flat-square)](./LICENSE)
@@ -243,7 +243,7 @@ npm run stand   # локальная имитация темы форума: htt
 <a id="версионирование"></a>
 ## 📊 Версии
 
-Текущая версия — **6.4.1**, история изменений — в [CHANGELOG.md](./CHANGELOG.md). Используется [Semantic Versioning](https://semver.org/): MAJOR — несовместимые изменения, MINOR — новые функции, PATCH — исправления.
+Текущая версия — **6.5.0**, история изменений — в [CHANGELOG.md](./CHANGELOG.md). Используется [Semantic Versioning](https://semver.org/): MAJOR — несовместимые изменения, MINOR — новые функции, PATCH — исправления.
 
 <a id="лицензия"></a>
 ## 📝 Лицензия

@@ -517,6 +517,7 @@
 .nl-pv-sp { margin:6px auto; max-width:90%; text-align:left; border:1px solid #3a3d42; background:#26282c; padding:4px 10px; }
 .nl-pv-sp summary { cursor:pointer; color:#9aa0a6; font-family:var(--nl-font); font-size:13px; }
 .nl-pv-user { color:#54acd2; }
+.nl-pv-q { margin:8px 0; padding:10px 14px; border-left:3px solid #54acd2; background:#26282c; text-align:left; font-family:Arial, sans-serif; }
 
 /* ── Уведомление об обновлении правил ── */
 #nl-rules-banner { position:fixed; left:20px; bottom:20px; z-index:2147483000; max-width:460px; display:flex; gap:12px; align-items:flex-start;

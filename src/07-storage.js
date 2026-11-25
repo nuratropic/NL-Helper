@@ -131,7 +131,7 @@
     function loadSettings() {
         const def = { autoSubmit: false, floodControl: true, serverName: 'ASTANA', serverAuto: true, mgTerms: [...DEFAULT_MG_TERMS],
             minBioWords: BIO_RULES.minWords, maxBioWords: BIO_RULES.maxWords, hotkeys: true, uiMode: 'modal',
-            preview: false, autoTab: true, ruleCheck: true, post: { ...DEFAULT_POST } };
+            preview: false, autoTab: true, ruleCheck: true, postStyle: 'detroit', post: { ...DEFAULT_POST } };
         const s = readJSON(STORAGE.SETTINGS, null);
         const out = s && typeof s === 'object' ? { ...def, ...s } : def;
         if (!Array.isArray(out.mgTerms)) out.mgTerms = [...DEFAULT_MG_TERMS];

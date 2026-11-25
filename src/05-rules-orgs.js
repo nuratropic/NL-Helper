@@ -122,3 +122,22 @@
     }
     const ruleBody = (approved, rule) => combinedRuleBody(approved, [rule]);
 
+    // тот же пост в стиле Detroit: статус уже на баннере, здесь — пункты «■ 2.04 НАЗВАНИЕ», описание и мера
+    function detroitRuleBody(approved, rules) {
+        const many = rules.length > 1;
+        const sets = [...new Set(rules.map(r => RULES[r].set))];
+        const who  = sets.length === 1 && sets[0] === 'leader' ? 'Лидер' : 'Игрок';
+        const what = sets.length === 1 ? RULE_SETS[sets[0]].inPost : 'правил';
+        const lead = approved
+            ? `${who} понесёт наказание по ${many ? 'следующим пунктам' : 'следующему пункту'} ${what}:`
+            : `Нарушение не подтверждено. Тем не менее, обратите внимание на ${many ? 'следующие пункты' : 'следующий пункт'} правил:`;
+        const items = rules.map(id => {
+            const r = RULES[id];
+            return `[B][COLOR=${DBH.blue}]■ ${r.num}${r.note ? ' (прим.)' : ''}[/COLOR] [COLOR=${DBH.white}]${r.short.toUpperCase()}[/COLOR][/B]` +
+                (r.set !== 'general' ? ` [COLOR=${DBH.dim}]· ${RULE_SETS[r.set].name}[/COLOR]` : '') +
+                `\n[COLOR=${DBH.dim}]${r.note ? 'Примечание: ' : ''}${r.desc}.[/COLOR]` +
+                (r.penalty ? `\n[COLOR=${DBH.dim}]МЕРА:[/COLOR] [B][COLOR=${approved ? DBH.red : DBH.dim}]${r.penalty}[/COLOR][/B]` : '');
+        }).join('\n\n');
+        return `[COLOR=${DBH.text}]${lead}[/COLOR]\n\n${items}`;
+    }
+

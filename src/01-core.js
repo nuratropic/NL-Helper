@@ -6,7 +6,7 @@
     if (window.__NL_HELPER__) return; // защита от двойного запуска (две копии скрипта / SPA-переход)
     window.__NL_HELPER__ = true;
 
-    const VERSION = '6.4.1';
+    const VERSION = '6.5.0';
     // дата редакции «Общих правил серверов», с которой сверена таблица RULE_TABLE
     const RULES_REVISION = '14.11.2026';
 

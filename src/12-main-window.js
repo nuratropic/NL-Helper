@@ -308,8 +308,11 @@
         // предпросмотр собирает пост так же, как при вставке (с подстановкой плейсхолдеров)
         ov.querySelector('#dd-pv').onclick=()=>{
             const content = ov.querySelector('#dd-c').value;
-            const body = tpl.isRaw ? applyPH(content) : `[SIZE=6][COLOR=rgb(255,255,255)][I]${applyPH(content)}[/I][/COLOR][/SIZE]`;
-            showPreview(wrapPost(mentionOf(getAuthor()), serverName(), body));
+            const prefix = parseInt(ov.querySelector('#dd-p').value) || 0;
+            const body = tpl.isRaw ? applyPH(content)
+                : isDetroit() ? `[COLOR=${DBH.text}]${applyPH(content)}[/COLOR]`
+                : `[SIZE=6][COLOR=rgb(255,255,255)][I]${applyPH(content)}[/I][/COLOR][/SIZE]`;
+            showPreview(wrapPost(mentionOf(getAuthor()), serverName(), body, prefix));
         };
         ov.querySelector('#dd-s').onclick=()=>{
             const ok = cb({title:ov.querySelector('#dd-t').value.trim(),prefix:ov.querySelector('#dd-p').value,tags:ov.querySelector('#dd-tags').value.trim(),content:ov.querySelector('#dd-c').value.trim()});
@@ -331,7 +334,8 @@
             ? `${word} (сборный: ${rules.map(ruleLabel).join(', ')})`
             : `${word} — ${RULES[rules[0]].short} [${ruleLabel(rules[0])}]`;
         const syntheticTpl = { id:'combo', title, rules, prefix: approved ? P.ACCEPT : P.UNACCEPT };
-        return finishInsert(syntheticTpl, wrapPost(mentionOf(getAuthor()), serverName(), combinedRuleBody(approved, rules)));
+        const body = isDetroit() ? detroitRuleBody(approved, rules) : combinedRuleBody(approved, rules);
+        return finishInsert(syntheticTpl, wrapPost(mentionOf(getAuthor()), serverName(), body, syntheticTpl.prefix));
     }
 
     // строка правила в списке с чекбоксами (конструктор и мастер)

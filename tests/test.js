@@ -26,7 +26,7 @@ function run(store, pathname = '/threads/test-2.01-zhaloba.12345/page-2', noGM =
     env.globalThis = env;
     const hooked = code.replace(/\n\s*if \(document\.readyState === 'loading'\)[\s\S]*?\n\}\)\(\);\s*$/,
         `\n    globalThis.__T = { get TPLS(){return TPLS;}, RULES, RULE_SETS, RULE_COUNT, saveTemplates, getThreadId,
-        combinedRuleBody, scoreRulesByText, analyzeBio, checkForm, extractViolator, bbToHtml, wrapPost, setSets(s){ Object.assign(SETS, s); } };\n})();`);
+        combinedRuleBody, detroitRuleBody, scoreRulesByText, analyzeBio, checkForm, extractViolator, bbToHtml, wrapPost, setSets(s){ Object.assign(SETS, s); } };\n})();`);
     if (hooked === code) throw new Error('не найден конец скрипта для тестового хука');
     vm.runInNewContext(hooked, env);
     return env.__T;
@@ -105,7 +105,12 @@ ok(T2.extractViolator(complaint) === 'Bad_Guy', 'ник нарушителя и�
 section('Предпросмотр и оформление');
 const html = T2.bbToHtml('[B]x[/B] [COLOR=red]y[/COLOR] <script>alert(1)</script> [IMG]javascript:alert(1)[/IMG] [IMG]https://i.postimg.cc/a.png[/IMG]');
 ok(html.includes('<b>x</b>') && !html.includes('<script>') && !html.includes('javascript:') && html.includes('<img src="https://i.postimg.cc/a.png"'), 'BB → HTML: разметка есть, скрипты и javascript: отброшены');
-T2.setSets({ post: { header: '', footer: '', footerLink: '', address: 'уважаемый', closing: '', signature: '' } });
+const dbhPost = T2.wrapPost('Ник', 'ASTANA', 'ТЕЛО', 8);
+ok(dbhPost.includes('dbh2-header.png') && dbhPost.includes('dbh2-approved.png') && dbhPost.includes('[QUOTE]') && dbhPost.includes('dbh2-complete.png'), 'Detroit: шапка, баннер «одобрено», цитата и «Задача выполнена»');
+ok(T2.wrapPost('Ник', 'ASTANA', 'ТЕЛО', 4).includes('dbh2-denied.png') && T2.wrapPost('Ник', 'ASTANA', 'ТЕЛО', 2).includes('dbh2-review.png'), 'Detroit: баннер по префиксу (отказано, на рассмотрении)');
+const dbhRule = T2.detroitRuleBody(true, ['2.04']);
+ok(dbhRule.includes('■ 2.04') && dbhRule.includes('СУЩЕСТВЕННАЯ ПОМЕХА') && dbhRule.includes('Ban 3 дня'), 'Detroit: пункт правил с названием и мерой');
+T2.setSets({ postStyle: 'classic', post: { header: '', footer: '', footerLink: '', address: 'уважаемый', closing: '', signature: '' } });
 const bare = T2.wrapPost('Ник', 'ASTANA', 'ТЕЛО');
 ok(!bare.includes('[IMG]') && !bare.includes('С уважением') && bare.includes('ТЕЛО'), 'пустые поля оформления не попадают в пост');
 

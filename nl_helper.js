@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NL Helper
 // @namespace    https://forum.blackrussia.online
-// @version      6.4.1
+// @version      6.5.0
 // @description  Профессиональный помощник куратора форума Black Russia
 // @author       Nicki_Lachowski
 // @homepageURL  https://github.com/nuratropic/nl-helper
@@ -27,7 +27,7 @@
     if (window.__NL_HELPER__) return; // защита от двойного запуска (две копии скрипта / SPA-переход)
     window.__NL_HELPER__ = true;
 
-    const VERSION = '6.4.1';
+    const VERSION = '6.5.0';
     // дата редакции «Общих правил серверов», с которой сверена таблица RULE_TABLE
     const RULES_REVISION = '14.11.2026';
 
@@ -235,6 +235,21 @@
         closing:    'Приятной игры на сервере',
         signature:  'Администрация сервера',
     };
+
+    // СТИЛЬ «DETROIT» («чертоги разума»): баннеры нарисованы в docs/design/generate-dbh2.html
+    const DBH_IMG = {
+        header:   'https://i.postimg.cc/QdQnbyr6/dbh2-header.png',
+        divider:  'https://i.postimg.cc/SQP5N9r1/dbh2-divider.png',
+        complete: 'https://i.postimg.cc/W47C2fWk/dbh2-complete.png',
+        approved: 'https://i.postimg.cc/Kjjdpr5N/dbh2-approved.png',
+        denied:   'https://i.postimg.cc/9M8k9wjc/dbh2-denied.png',
+        review:   'https://i.postimg.cc/KzH9jXnR/dbh2-review.png',
+        resolved: 'https://i.postimg.cc/s23H04jD/dbh2-resolved.png',
+        closed:   'https://i.postimg.cc/4NrrwcH5/dbh2-closed.png',
+    };
+    // цвета текста в стиле Detroit (как на баннерах)
+    const DBH = { text: 'rgb(232,236,238)', dim: 'rgb(154,163,170)', white: 'rgb(245,247,248)', blue: 'rgb(47,143,232)',
+        red: 'rgb(229,57,74)', yellow: 'rgb(242,194,48)', gray: 'rgb(141,150,157)' };
 
     // ШАБЛОНЫ ПО УМОЛЧАНИЮ (без шаблонов по пунктам правил — они строятся из RULE_TABLE ниже)
     const T = (id, title, prefix, content, extra) => Object.assign({ id, title, prefix, content, tags:'', isPinned:false, isNew:false, uses:0 }, extra || {});
@@ -528,6 +543,25 @@
     }
     const ruleBody = (approved, rule) => combinedRuleBody(approved, [rule]);
 
+    // тот же пост в стиле Detroit: статус уже на баннере, здесь — пункты «■ 2.04 НАЗВАНИЕ», описание и мера
+    function detroitRuleBody(approved, rules) {
+        const many = rules.length > 1;
+        const sets = [...new Set(rules.map(r => RULES[r].set))];
+        const who  = sets.length === 1 && sets[0] === 'leader' ? 'Лидер' : 'Игрок';
+        const what = sets.length === 1 ? RULE_SETS[sets[0]].inPost : 'правил';
+        const lead = approved
+            ? `${who} понесёт наказание по ${many ? 'следующим пунктам' : 'следующему пункту'} ${what}:`
+            : `Нарушение не подтверждено. Тем не менее, обратите внимание на ${many ? 'следующие пункты' : 'следующий пункт'} правил:`;
+        const items = rules.map(id => {
+            const r = RULES[id];
+            return `[B][COLOR=${DBH.blue}]■ ${r.num}${r.note ? ' (прим.)' : ''}[/COLOR] [COLOR=${DBH.white}]${r.short.toUpperCase()}[/COLOR][/B]` +
+                (r.set !== 'general' ? ` [COLOR=${DBH.dim}]· ${RULE_SETS[r.set].name}[/COLOR]` : '') +
+                `\n[COLOR=${DBH.dim}]${r.note ? 'Примечание: ' : ''}${r.desc}.[/COLOR]` +
+                (r.penalty ? `\n[COLOR=${DBH.dim}]МЕРА:[/COLOR] [B][COLOR=${approved ? DBH.red : DBH.dim}]${r.penalty}[/COLOR][/B]` : '');
+        }).join('\n\n');
+        return `[COLOR=${DBH.text}]${lead}[/COLOR]\n\n${items}`;
+    }
+
     // общие теги шаблонов игроков без номера пункта
     const PLAYER_TAGS = {
         p1: 'игроки, жалоба, рассмотрение, закреплено, в работе',
@@ -713,7 +747,7 @@
     function loadSettings() {
         const def = { autoSubmit: false, floodControl: true, serverName: 'ASTANA', serverAuto: true, mgTerms: [...DEFAULT_MG_TERMS],
             minBioWords: BIO_RULES.minWords, maxBioWords: BIO_RULES.maxWords, hotkeys: true, uiMode: 'modal',
-            preview: false, autoTab: true, ruleCheck: true, post: { ...DEFAULT_POST } };
+            preview: false, autoTab: true, ruleCheck: true, postStyle: 'detroit', post: { ...DEFAULT_POST } };
         const s = readJSON(STORAGE.SETTINGS, null);
         const out = s && typeof s === 'object' ? { ...def, ...s } : def;
         if (!Array.isArray(out.mgTerms)) out.mgTerms = [...DEFAULT_MG_TERMS];
@@ -1002,11 +1036,45 @@
     // в BB-код попадают только https-ссылки без символов, ломающих разметку
     const safeUrl = u => /^https:\/\/[^\s\[\]'"<>]+$/i.test(String(u || '').trim()) ? String(u).trim() : '';
 
-    // общая обёртка поста (шапка-картинка, приветствие, тело, футер-картинка, подпись) — по настройкам SETS.post
-    function wrapPost(mention, srv, bodyBlock) {
+    // СТИЛЬ ПОСТА: «Detroit» (по умолчанию) или «Классика»
+    const isDetroit = () => SETS.postStyle !== 'classic';
+    // префикс ответа → баннер статуса в стиле Detroit
+    function dbhStatus(prefix) {
+        if (prefix === P.ACCEPT || prefix === P.REALIZOVANO) return 'approved';
+        if (prefix === P.UNACCEPT) return 'denied';
+        if ([P.PIN, P.OJIDANIE, P.GA, P.TEX].includes(prefix)) return 'review';
+        if (prefix === P.RESHENO || prefix === P.WATCHED) return 'resolved';
+        if (prefix === P.CLOSE) return 'closed';
+        return null;
+    }
+    const DBH_STATUS_COLOR = { approved: DBH.blue, denied: DBH.red, review: DBH.yellow, resolved: DBH.blue, closed: DBH.gray };
+
+    // тексты оформления из настроек; в них работают плейсхолдеры ({curator}, {server}…)
+    function postTexts() {
         const p = { ...DEFAULT_POST, ...(SETS.post || {}) };
-        // в текстовых полях оформления тоже работают плейсхолдеры ({curator}, {server}…)
         ['address', 'closing', 'signature'].forEach(k => { if (p[k] && p[k].includes('{')) p[k] = applyPH(p[k]); });
+        return p;
+    }
+
+    // «Detroit»: шапка → приветствие → баннер статуса → текст в цитате → разделитель → «Задача выполнена»
+    function wrapDetroit(mention, srv, body, prefix) {
+        const p = postTexts();
+        const st = dbhStatus(prefix);
+        return `[CENTER][IMG]${DBH_IMG.header}[/IMG]\n\n` +
+            `[SIZE=5][FONT=Arial][COLOR=${DBH.dim}]${greeting()}${p.address ? ', ' + p.address : ','}[/COLOR] [B][COLOR=${DBH.white}]${mention}[/COLOR][/B][/FONT][/SIZE]\n` +
+            (st ? `\n[IMG]${DBH_IMG[st]}[/IMG]\n` : '') + `[/CENTER]\n` +
+            `[QUOTE][FONT=Arial][SIZE=4]${body}[/SIZE][/FONT][/QUOTE]\n` +
+            `[CENTER][IMG]${DBH_IMG.divider}[/IMG]\n` +
+            (p.closing ? `[SIZE=4][FONT=Arial][COLOR=${DBH.dim}]${p.closing}[/COLOR] [B][COLOR=${DBH.white}]${srv}[/COLOR][/B][/FONT][/SIZE]\n` : '') +
+            `[IMG]${DBH_IMG.complete}[/IMG]\n` +
+            (p.signature ? `[SIZE=3][FONT=Arial][COLOR=${DBH.dim}]С уважением, ${p.signature}[/COLOR][/FONT][/SIZE]\n` : '') +
+            `[/CENTER]`;
+    }
+
+    // общая обёртка поста; prefix нужен стилю Detroit, чтобы выбрать баннер статуса
+    function wrapPost(mention, srv, bodyBlock, prefix) {
+        if (isDetroit()) return wrapDetroit(mention, srv, bodyBlock, prefix);
+        const p = postTexts();
         const header = safeUrl(p.header), footer = safeUrl(p.footer), link = safeUrl(p.footerLink);
         const footerImg = footer ? (link ? `[URL='${link}'][IMG]${footer}[/IMG][/URL]` : `[IMG]${footer}[/IMG]`) : '';
         return `[CENTER][FONT=times new roman]\n` +
@@ -1033,8 +1101,9 @@
                 .replace(/\[U\]([\s\S]*?)\[\/U\]/gi, '<u>$1</u>')
                 .replace(/\[SIZE=(\d)\]([\s\S]*?)\[\/SIZE\]/gi, (m, s, t) => `<span style="font-size:${BB_SIZES[s] || 15}px">${t}</span>`)
                 .replace(/\[COLOR=([^\]]+)\]([\s\S]*?)\[\/COLOR\]/gi, (m, c, t) => `<span style="color:${color(c)}">${t}</span>`)
-                .replace(/\[FONT=[^\]]+\]([\s\S]*?)\[\/FONT\]/gi, '<span style="font-family:\'Times New Roman\',serif">$1</span>')
+                .replace(/\[FONT=([^\]]+)\]([\s\S]*?)\[\/FONT\]/gi, (m, f, t) => `<span style="font-family:${/^[\w\s-]+$/.test(f) ? f : 'serif'}, sans-serif">${t}</span>`)
                 .replace(/\[CENTER\]([\s\S]*?)\[\/CENTER\]/gi, '<div style="text-align:center">$1</div>')
+                .replace(/\[QUOTE\]([\s\S]*?)\[\/QUOTE\]/gi, '<blockquote class="nl-pv-q">$1</blockquote>')
                 .replace(/\[SPOILER(?:=&quot;([^\]]*?)&quot;)?\]([\s\S]*?)\[\/SPOILER\]/gi, (m, t, c) => `<details class="nl-pv-sp"><summary>${t || 'Спойлер'}</summary>${c}</details>`)
                 .replace(/\[USER=\d+\]([\s\S]*?)\[\/USER\]/gi, '<b class="nl-pv-user">@$1</b>');
         }
@@ -1103,8 +1172,15 @@
             const mention = mentionOf(author);
             const srv = serverName();
 
-            // isRaw: контент уже содержит готовый BB-код тела — только плейсхолдеры
-            if (tpl.isRaw) return finishInsert(tpl, wrapPost(mention, srv, applyPH(String(tpl.content || ''))));
+            // isRaw: контент уже содержит готовый BB-код тела — только плейсхолдеры.
+            // Шаблоны по пунктам правил в стиле Detroit собираются заново (если пользователь их не правил).
+            if (tpl.isRaw) {
+                const def = DEFAULT_BY_ID[tpl.id];
+                const body = isDetroit() && tpl.rule && RULES[tpl.rule] && def && def.tpl.content === tpl.content
+                    ? detroitRuleBody(tpl.prefix === P.ACCEPT, [tpl.rule])
+                    : applyPH(String(tpl.content || ''));
+                return finishInsert(tpl, wrapPost(mention, srv, body, tpl.prefix));
+            }
 
             let rawBody = applyPH(String(tpl.content || ''))
                 .replace(/\[url=[^\]]*\]\[img\][^\[]*\[\/img\]\[\/url\]/gi, '')
@@ -1112,12 +1188,17 @@
                 .replace(/\[\/?(CENTER|FONT|COLOR|SIZE|I|B|U)(=[^\]]+)?\]/gi, '')
                 .trim();
 
-            const pc = PREFIX_COLORS[tpl.prefix] || '#61bd6d';
             const sw = STATUS_WORDS.find(([ids]) => ids.includes(tpl.prefix));
+            if (isDetroit()) {
+                const sc = DBH_STATUS_COLOR[dbhStatus(tpl.prefix)] || DBH.white;
+                if (sw) rawBody = rawBody.replace(new RegExp(`(${sw[1]})`, 'i'), `[/COLOR][B][COLOR=${sc}]$1[/COLOR][/B][COLOR=${DBH.text}]`);
+                return finishInsert(tpl, wrapPost(mention, srv, `[COLOR=${DBH.text}]${rawBody}[/COLOR]`, tpl.prefix));
+            }
+            const pc = PREFIX_COLORS[tpl.prefix] || '#61bd6d';
             if (sw) rawBody = rawBody.replace(new RegExp(`(${sw[1]})`, 'i'),
                 `[/I][/COLOR][COLOR=${pc}][I]$1[/I][/COLOR][COLOR=rgb(255,255,255)][I]`);
 
-            return finishInsert(tpl, wrapPost(mention, srv, `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]`));
+            return finishInsert(tpl, wrapPost(mention, srv, `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]`, tpl.prefix));
         } catch (err) {
             console.error('NL Helper insertTemplate:', err);
             showNotification('❌ Ошибка вставки: ' + err.message, 'error');
@@ -1782,6 +1863,7 @@
 .nl-pv-sp { margin:6px auto; max-width:90%; text-align:left; border:1px solid #3a3d42; background:#26282c; padding:4px 10px; }
 .nl-pv-sp summary { cursor:pointer; color:#9aa0a6; font-family:var(--nl-font); font-size:13px; }
 .nl-pv-user { color:#54acd2; }
+.nl-pv-q { margin:8px 0; padding:10px 14px; border-left:3px solid #54acd2; background:#26282c; text-align:left; font-family:Arial, sans-serif; }
 
 /* ── Уведомление об обновлении правил ── */
 #nl-rules-banner { position:fixed; left:20px; bottom:20px; z-index:2147483000; max-width:460px; display:flex; gap:12px; align-items:flex-start;
@@ -2160,8 +2242,11 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
         // предпросмотр собирает пост так же, как при вставке (с подстановкой плейсхолдеров)
         ov.querySelector('#dd-pv').onclick=()=>{
             const content = ov.querySelector('#dd-c').value;
-            const body = tpl.isRaw ? applyPH(content) : `[SIZE=6][COLOR=rgb(255,255,255)][I]${applyPH(content)}[/I][/COLOR][/SIZE]`;
-            showPreview(wrapPost(mentionOf(getAuthor()), serverName(), body));
+            const prefix = parseInt(ov.querySelector('#dd-p').value) || 0;
+            const body = tpl.isRaw ? applyPH(content)
+                : isDetroit() ? `[COLOR=${DBH.text}]${applyPH(content)}[/COLOR]`
+                : `[SIZE=6][COLOR=rgb(255,255,255)][I]${applyPH(content)}[/I][/COLOR][/SIZE]`;
+            showPreview(wrapPost(mentionOf(getAuthor()), serverName(), body, prefix));
         };
         ov.querySelector('#dd-s').onclick=()=>{
             const ok = cb({title:ov.querySelector('#dd-t').value.trim(),prefix:ov.querySelector('#dd-p').value,tags:ov.querySelector('#dd-tags').value.trim(),content:ov.querySelector('#dd-c').value.trim()});
@@ -2183,7 +2268,8 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
             ? `${word} (сборный: ${rules.map(ruleLabel).join(', ')})`
             : `${word} — ${RULES[rules[0]].short} [${ruleLabel(rules[0])}]`;
         const syntheticTpl = { id:'combo', title, rules, prefix: approved ? P.ACCEPT : P.UNACCEPT };
-        return finishInsert(syntheticTpl, wrapPost(mentionOf(getAuthor()), serverName(), combinedRuleBody(approved, rules)));
+        const body = isDetroit() ? detroitRuleBody(approved, rules) : combinedRuleBody(approved, rules);
+        return finishInsert(syntheticTpl, wrapPost(mentionOf(getAuthor()), serverName(), body, syntheticTpl.prefix));
     }
 
     // строка правила в списке с чекбоксами (конструктор и мастер)
@@ -3266,6 +3352,13 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
                         <label class="nl-cl2"><input type="checkbox" id="s-hk" ${draft.hotkeys ? 'checked' : ''}></label>
                     </div>
                     <div class="nl-set-row">
+                        <div><div class="nl-set-label">Стиль поста</div><div class="nl-set-desc">«Detroit» — интерфейс андроида: баннер статуса, пункты правил в цитате, «Задача выполнена». «Классика» — прежнее оформление с узорами</div></div>
+                        <select class="nl-sel" id="s-poststyle" style="width:150px">
+                            <option value="detroit"${draft.postStyle !== 'classic' ? ' selected' : ''}>Detroit</option>
+                            <option value="classic"${draft.postStyle === 'classic' ? ' selected' : ''}>Классика</option>
+                        </select>
+                    </div>
+                    <div class="nl-set-row">
                         <div><div class="nl-set-label">Режим отображения</div><div class="nl-set-desc">«Панель сбоку» — помощник открывается справа, тема форума остаётся видна</div></div>
                         <select class="nl-sel" id="s-uimode" style="width:150px">
                             <option value="modal"${draft.uiMode !== 'dock' ? ' selected' : ''}>Окно</option>
@@ -3333,6 +3426,7 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
         mountDialog(ov);
         ov.querySelector('#s-hk').onchange = e => { draft.hotkeys = e.target.checked; };
         ov.querySelector('#s-uimode').onchange = e => { draft.uiMode = e.target.value; };
+        ov.querySelector('#s-poststyle').onchange = e => { draft.postStyle = e.target.value; };
         ov.querySelector('#s-min').oninput = e => { draft.minBioWords = parseInt(e.target.value) || BIO_RULES.minWords; };
         ov.querySelector('#s-max').oninput = e => { draft.maxBioWords = parseInt(e.target.value) || BIO_RULES.maxWords; };
         ov.querySelectorAll('input[data-k]').forEach(cb => { cb.onchange = () => { draft[cb.dataset.k] = cb.checked; }; });
@@ -3344,9 +3438,9 @@ body.nl-ra9 .nl-m, body.nl-ra9 .nl-dbox, body.nl-ra9 .nl-cmd-box, body.nl-ra9 .n
         };
         ov.querySelector('#s-post-pv').onclick = () => {
             // предпросмотр с черновыми настройками, не сохраняя их
-            const saved = SETS.post; SETS.post = draft.post;
-            try { showPreview(wrapPost(mentionOf(getAuthor()), serverName(), '[SIZE=6][COLOR=rgb(255,255,255)][I]Текст ответа куратора.[/I][/COLOR][/SIZE]')); }
-            finally { SETS.post = saved; }
+            const saved = SETS.post, savedStyle = SETS.postStyle; SETS.post = draft.post; SETS.postStyle = draft.postStyle;
+            try { showPreview(wrapPost(mentionOf(getAuthor()), serverName(), isDetroit() ? '[COLOR=' + DBH.text + ']Текст ответа куратора.[/COLOR]' : '[SIZE=6][COLOR=rgb(255,255,255)][I]Текст ответа куратора.[/I][/COLOR][/SIZE]', P.ACCEPT)); }
+            finally { SETS.post = saved; SETS.postStyle = savedStyle; }
         };
         const list = ov.querySelector('#s-mg-list');
         const refreshTags = () => { list.innerHTML = renderTags(); };

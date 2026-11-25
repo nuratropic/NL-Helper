@@ -2,11 +2,45 @@
     // в BB-код попадают только https-ссылки без символов, ломающих разметку
     const safeUrl = u => /^https:\/\/[^\s\[\]'"<>]+$/i.test(String(u || '').trim()) ? String(u).trim() : '';
 
-    // общая обёртка поста (шапка-картинка, приветствие, тело, футер-картинка, подпись) — по настройкам SETS.post
-    function wrapPost(mention, srv, bodyBlock) {
+    // СТИЛЬ ПОСТА: «Detroit» (по умолчанию) или «Классика»
+    const isDetroit = () => SETS.postStyle !== 'classic';
+    // префикс ответа → баннер статуса в стиле Detroit
+    function dbhStatus(prefix) {
+        if (prefix === P.ACCEPT || prefix === P.REALIZOVANO) return 'approved';
+        if (prefix === P.UNACCEPT) return 'denied';
+        if ([P.PIN, P.OJIDANIE, P.GA, P.TEX].includes(prefix)) return 'review';
+        if (prefix === P.RESHENO || prefix === P.WATCHED) return 'resolved';
+        if (prefix === P.CLOSE) return 'closed';
+        return null;
+    }
+    const DBH_STATUS_COLOR = { approved: DBH.blue, denied: DBH.red, review: DBH.yellow, resolved: DBH.blue, closed: DBH.gray };
+
+    // тексты оформления из настроек; в них работают плейсхолдеры ({curator}, {server}…)
+    function postTexts() {
         const p = { ...DEFAULT_POST, ...(SETS.post || {}) };
-        // в текстовых полях оформления тоже работают плейсхолдеры ({curator}, {server}…)
         ['address', 'closing', 'signature'].forEach(k => { if (p[k] && p[k].includes('{')) p[k] = applyPH(p[k]); });
+        return p;
+    }
+
+    // «Detroit»: шапка → приветствие → баннер статуса → текст в цитате → разделитель → «Задача выполнена»
+    function wrapDetroit(mention, srv, body, prefix) {
+        const p = postTexts();
+        const st = dbhStatus(prefix);
+        return `[CENTER][IMG]${DBH_IMG.header}[/IMG]\n\n` +
+            `[SIZE=5][FONT=Arial][COLOR=${DBH.dim}]${greeting()}${p.address ? ', ' + p.address : ','}[/COLOR] [B][COLOR=${DBH.white}]${mention}[/COLOR][/B][/FONT][/SIZE]\n` +
+            (st ? `\n[IMG]${DBH_IMG[st]}[/IMG]\n` : '') + `[/CENTER]\n` +
+            `[QUOTE][FONT=Arial][SIZE=4]${body}[/SIZE][/FONT][/QUOTE]\n` +
+            `[CENTER][IMG]${DBH_IMG.divider}[/IMG]\n` +
+            (p.closing ? `[SIZE=4][FONT=Arial][COLOR=${DBH.dim}]${p.closing}[/COLOR] [B][COLOR=${DBH.white}]${srv}[/COLOR][/B][/FONT][/SIZE]\n` : '') +
+            `[IMG]${DBH_IMG.complete}[/IMG]\n` +
+            (p.signature ? `[SIZE=3][FONT=Arial][COLOR=${DBH.dim}]С уважением, ${p.signature}[/COLOR][/FONT][/SIZE]\n` : '') +
+            `[/CENTER]`;
+    }
+
+    // общая обёртка поста; prefix нужен стилю Detroit, чтобы выбрать баннер статуса
+    function wrapPost(mention, srv, bodyBlock, prefix) {
+        if (isDetroit()) return wrapDetroit(mention, srv, bodyBlock, prefix);
+        const p = postTexts();
         const header = safeUrl(p.header), footer = safeUrl(p.footer), link = safeUrl(p.footerLink);
         const footerImg = footer ? (link ? `[URL='${link}'][IMG]${footer}[/IMG][/URL]` : `[IMG]${footer}[/IMG]`) : '';
         return `[CENTER][FONT=times new roman]\n` +
@@ -33,8 +67,9 @@
                 .replace(/\[U\]([\s\S]*?)\[\/U\]/gi, '<u>$1</u>')
                 .replace(/\[SIZE=(\d)\]([\s\S]*?)\[\/SIZE\]/gi, (m, s, t) => `<span style="font-size:${BB_SIZES[s] || 15}px">${t}</span>`)
                 .replace(/\[COLOR=([^\]]+)\]([\s\S]*?)\[\/COLOR\]/gi, (m, c, t) => `<span style="color:${color(c)}">${t}</span>`)
-                .replace(/\[FONT=[^\]]+\]([\s\S]*?)\[\/FONT\]/gi, '<span style="font-family:\'Times New Roman\',serif">$1</span>')
+                .replace(/\[FONT=([^\]]+)\]([\s\S]*?)\[\/FONT\]/gi, (m, f, t) => `<span style="font-family:${/^[\w\s-]+$/.test(f) ? f : 'serif'}, sans-serif">${t}</span>`)
                 .replace(/\[CENTER\]([\s\S]*?)\[\/CENTER\]/gi, '<div style="text-align:center">$1</div>')
+                .replace(/\[QUOTE\]([\s\S]*?)\[\/QUOTE\]/gi, '<blockquote class="nl-pv-q">$1</blockquote>')
                 .replace(/\[SPOILER(?:=&quot;([^\]]*?)&quot;)?\]([\s\S]*?)\[\/SPOILER\]/gi, (m, t, c) => `<details class="nl-pv-sp"><summary>${t || 'Спойлер'}</summary>${c}</details>`)
                 .replace(/\[USER=\d+\]([\s\S]*?)\[\/USER\]/gi, '<b class="nl-pv-user">@$1</b>');
         }
@@ -103,8 +138,15 @@
             const mention = mentionOf(author);
             const srv = serverName();
 
-            // isRaw: контент уже содержит готовый BB-код тела — только плейсхолдеры
-            if (tpl.isRaw) return finishInsert(tpl, wrapPost(mention, srv, applyPH(String(tpl.content || ''))));
+            // isRaw: контент уже содержит готовый BB-код тела — только плейсхолдеры.
+            // Шаблоны по пунктам правил в стиле Detroit собираются заново (если пользователь их не правил).
+            if (tpl.isRaw) {
+                const def = DEFAULT_BY_ID[tpl.id];
+                const body = isDetroit() && tpl.rule && RULES[tpl.rule] && def && def.tpl.content === tpl.content
+                    ? detroitRuleBody(tpl.prefix === P.ACCEPT, [tpl.rule])
+                    : applyPH(String(tpl.content || ''));
+                return finishInsert(tpl, wrapPost(mention, srv, body, tpl.prefix));
+            }
 
             let rawBody = applyPH(String(tpl.content || ''))
                 .replace(/\[url=[^\]]*\]\[img\][^\[]*\[\/img\]\[\/url\]/gi, '')
@@ -112,12 +154,17 @@
                 .replace(/\[\/?(CENTER|FONT|COLOR|SIZE|I|B|U)(=[^\]]+)?\]/gi, '')
                 .trim();
 
-            const pc = PREFIX_COLORS[tpl.prefix] || '#61bd6d';
             const sw = STATUS_WORDS.find(([ids]) => ids.includes(tpl.prefix));
+            if (isDetroit()) {
+                const sc = DBH_STATUS_COLOR[dbhStatus(tpl.prefix)] || DBH.white;
+                if (sw) rawBody = rawBody.replace(new RegExp(`(${sw[1]})`, 'i'), `[/COLOR][B][COLOR=${sc}]$1[/COLOR][/B][COLOR=${DBH.text}]`);
+                return finishInsert(tpl, wrapPost(mention, srv, `[COLOR=${DBH.text}]${rawBody}[/COLOR]`, tpl.prefix));
+            }
+            const pc = PREFIX_COLORS[tpl.prefix] || '#61bd6d';
             if (sw) rawBody = rawBody.replace(new RegExp(`(${sw[1]})`, 'i'),
                 `[/I][/COLOR][COLOR=${pc}][I]$1[/I][/COLOR][COLOR=rgb(255,255,255)][I]`);
 
-            return finishInsert(tpl, wrapPost(mention, srv, `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]`));
+            return finishInsert(tpl, wrapPost(mention, srv, `[SIZE=6][COLOR=rgb(255,255,255)][I]${rawBody}[/I][/COLOR][/SIZE]`, tpl.prefix));
         } catch (err) {
             console.error('NL Helper insertTemplate:', err);
             showNotification('❌ Ошибка вставки: ' + err.message, 'error');

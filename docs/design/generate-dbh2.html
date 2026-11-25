@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Генератор DBH v2</title>
+<style>body{background:#2f3136;color:#ddd;font:14px system-ui;padding:16px}img{display:block;max-width:100%;margin:10px 0}</style></head>
+<body><h3>Detroit v2 — «чертоги разума» и сайт</h3><div id="log"></div>
+<script>
+// Стиль «чертогов разума»: белые плашки задач поверх тёмной сцены, синяя — выполнено,
+// тёмная — текущая; тонкие линии-связи, крупная вероятность, жёлтые маркеры, замки [...].
+const W = 1000;
+const F = "Bahnschrift, 'Segoe UI', Arial, sans-serif";
+const FC = "'Bahnschrift SemiCondensed', Bahnschrift, 'Segoe UI', Arial, sans-serif";
+const INK = '#15191d', WHITE = '#f5f7f8', DIM = '#9aa3aa';
+const ST = {
+  approved: { c: '#2f8fe8', word: 'ОДОБРЕНО',        prob: 97, probL: ['ВЕРОЯТНОСТЬ', 'НАРУШЕНИЯ'], ev: ['ДОКАЗАТЕЛЬСТВА', 'ПРОВЕРЕНЫ'], step3: ['ВЫНЕСТИ', 'РЕШЕНИЕ', 'done'],
+              subs: [['ok', 'НАКАЗАНИЕ', 'ВЫДАНО'], ['ok', 'ЗАЯВИТЕЛЬ', 'УВЕДОМЛЁН'], ['lock', '[...]', '']] },
+  denied:   { c: '#e5394a', word: 'ОТКАЗАНО',        prob: 12, probL: ['ВЕРОЯТНОСТЬ', 'НАРУШЕНИЯ'], ev: ['ДОКАЗАТЕЛЬСТВ', 'НЕДОСТАТОЧНО'], step3: ['ВЫНЕСТИ', 'РЕШЕНИЕ', 'done'],
+              subs: [['x', 'НАРУШЕНИЕ', 'НЕ ПОДТВЕРЖДЕНО'], ['ok', 'ЗАЯВИТЕЛЬ', 'УВЕДОМЛЁН'], ['lock', '[...]', '']] },
+  review:   { c: '#f2c230', word: 'НА РАССМОТРЕНИИ', prob: 54, probL: ['СБОР', 'ДАННЫХ'], ev: ['ДОКАЗАТЕЛЬСТВА', 'ПРОВЕРЯЮТСЯ'], step3: ['ВЫНЕСТИ', 'РЕШЕНИЕ', 'wait'],
+              subs: [['mark', 'ИЗУЧИТЬ', 'МАТЕРИАЛЫ'], ['lock', '[...]', ''], ['lock', '[...]', '']] },
+  resolved: { c: '#2f8fe8', word: 'РЕШЕНО',          prob: 100, probL: ['СИТУАЦИЯ', 'УРЕГУЛИРОВАНА'], ev: ['СТОРОНЫ', 'ВЫСЛУШАНЫ'], step3: ['ЗАКРЫТЬ', 'ОБРАЩЕНИЕ', 'done'],
+              subs: [['ok', 'КОНФЛИКТ', 'ИСЧЕРПАН'], ['ok', 'СТОРОНЫ', 'УВЕДОМЛЕНЫ'], ['lock', '[...]', '']] },
+  closed:   { c: '#8d969d', word: 'ЗАКРЫТО',         prob: 0, probL: ['ДОСТУП', 'ОГРАНИЧЕН'], ev: ['ОБРАЩЕНИЕ', 'В АРХИВЕ'], step3: ['ОТВЕТЫ', 'НЕДОСТУПНЫ', 'lock'],
+              subs: [['lock', '[...]', ''], ['lock', '[...]', ''], ['lock', '[...]', '']] },
+};
+const lockIcon = (x, y, c) => `<g transform="translate(${x} ${y})"><rect x="-5" y="-1" width="10" height="8" rx="1" fill="${c}"/><path d="M-3 -1 v-3 a3 3 0 0 1 6 0 v3" fill="none" stroke="${c}" stroke-width="1.6"/></g>`;
+const marker = (x, y, c, inner) => `<g transform="translate(${x} ${y})"><rect x="-8" y="-8" width="16" height="16" fill="none" stroke="${c}" stroke-width="1.5"/>${inner || `<rect x="-3.5" y="-3.5" width="7" height="7" fill="${c}"/>`}</g>`;
+const bracket = (x, y, w, h, l, c) => `<g fill="none" stroke="${c}" stroke-width="1.5" opacity=".9"><path d="M${x} ${y + l} V${y} H${x + l}"/><path d="M${x + w - l} ${y + h} H${x + w} V${y + h - l}"/></g>`;
+// «штрихкод» — линейка из рисок разной высоты, как на сайте и в интерфейсе андроида
+function barcode(x, y, w, c, seed, op = .8) {
+  let s = '', r = seed;
+  for (let i = 0; x + i * 4 < x + w; i++) { r = (r * 9301 + 49297) % 233280; const h = 4 + (r / 233280) * 10; const big = i % 25 === 0; s += `<rect x="${x + i * 4}" y="${y - (big ? 16 : h)}" width="${big ? 2 : 1}" height="${big ? 16 : h}" fill="${c}" opacity="${big ? op : op * .55}"/>`; }
+  return s;
+}
+const glowBox = (id, d) => `<filter id="${id}" x="-40%" y="-80%" width="180%" height="260%"><feGaussianBlur stdDeviation="${d}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+const shadow = `<filter id="sh" x="-10%" y="-30%" width="120%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity=".45"/></filter>`;
+
+function statusBanner(s) {
+  const H = 320;
+  const wordSize = Math.min(36, Math.floor((236 - s.word.length * 2) / (s.word.length * 0.66)));
+  const sub = s.subs.map(([kind, a, b], i) => {
+    const y = 196 + i * 34;
+    const icon = kind === 'lock' ? lockIcon(714, y - 4, DIM) : kind === 'x' ? marker(714, y - 4, '#e5394a', '<path d="M-3.5 -3.5 L3.5 3.5 M3.5 -3.5 L-3.5 3.5" stroke="#e5394a" stroke-width="2"/>') : kind === 'mark' ? marker(714, y - 4, '#f2c230') : marker(714, y - 4, s.c, `<path d="M-4 0 L-1 3 L4 -3" fill="none" stroke="${s.c}" stroke-width="2"/>`);
+    const txt = b ? `<tspan font-weight="700">${a}</tspan><tspan fill="${DIM}"> ${b}</tspan>` : `<tspan fill="${DIM}">${a}</tspan>`;
+    return `<path d="M700 ${y - 4} H704" stroke="${WHITE}" stroke-opacity=".6"/>${icon}<text x="732" y="${y + 1}" font-family="${FC}" font-size="15" letter-spacing="1" fill="${WHITE}">${txt}</text>`;
+  }).join('');
+  const s3 = s.step3[2];
+  const s3icon = s3 === 'done' ? `<path d="M624 200 l4 4 l8 -9" fill="none" stroke="${s.c}" stroke-width="2.4"/>` : s3 === 'wait' ? `<circle cx="630" cy="200" r="6" fill="none" stroke="#f2c230" stroke-width="2"/>` : lockIcon(630, 198, DIM);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>${shadow}${glowBox('gl', 3)}
+    <linearGradient id="vl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${WHITE}" stop-opacity="0"/><stop offset=".25" stop-color="${WHITE}" stop-opacity=".55"/><stop offset="1" stop-color="${WHITE}" stop-opacity=".55"/></linearGradient>
+  </defs>
+  <!-- вероятность -->
+  <path d="M40 36 H190" stroke="${WHITE}" stroke-width="2.5"/>
+  <text x="38" y="104" font-family="${F}" font-weight="300" font-size="66" fill="${WHITE}">${s.prob}<tspan font-size="40">%</tspan></text>
+  <text x="${s.prob >= 100 ? 214 : 176}" y="80" font-family="${FC}" font-size="11" letter-spacing="1.5" fill="${WHITE}">${s.probL[0]}</text>
+  <text x="${s.prob >= 100 ? 214 : 176}" y="95" font-family="${FC}" font-size="11" letter-spacing="1.5" fill="${WHITE}">${s.probL[1]}</text>
+  <path d="M40 124 H260" stroke="${WHITE}" stroke-opacity=".25"/>
+  <path d="M262 30 V292" stroke="url(#vl)"/><circle cx="262" cy="30" r="3" fill="${WHITE}"/>
+  <path d="M262 74 H318 M262 200 H318" stroke="${WHITE}" stroke-opacity=".55"/>
+  <!-- задачи (слева направо: текущая цель → выполнено → решение) -->
+  <g filter="url(#sh)">
+    <rect x="318" y="44" width="330" height="60" fill="${WHITE}"/>
+  </g>
+  ${bracket(310, 36, 346, 76, 14, WHITE)}
+  <text x="338" y="70" font-family="${F}" font-size="21" letter-spacing="1" fill="${INK}"><tspan font-weight="700">РАССМОТРЕТЬ</tspan> <tspan font-weight="300">ЖАЛОБУ</tspan></text>
+  <text x="338" y="92" font-family="${FC}" font-size="12" letter-spacing="2" fill="#5b646b">ЦЕЛЬ · ФОРУМ СЕРВЕРА</text>
+  <g filter="url(#sh)"><rect x="338" y="180" width="310" height="40" fill="#101418" fill-opacity=".88"/></g>
+  <rect x="338" y="180" width="5" height="40" fill="${s.c}" filter="url(#gl)"/>
+  <text x="356" y="205" font-family="${F}" font-size="17" letter-spacing="1" fill="${WHITE}"><tspan font-weight="700">${s.step3[0]}</tspan> <tspan font-weight="300">${s.step3[1]}</tspan></text>
+  ${s3icon}
+  <g filter="url(#sh)"><rect x="338" y="112" width="310" height="58" fill="${s.c}" fill-opacity=".16"/></g>
+  <rect x="338" y="112" width="310" height="58" fill="none" stroke="${s.c}" stroke-opacity=".55"/>
+  <rect x="338" y="112" width="5" height="58" fill="${s.c}" filter="url(#gl)"/>
+  <text x="356" y="136" font-family="${F}" font-size="17" letter-spacing="1" fill="${s.c}" font-weight="700">${s.ev[0]}</text>
+  <text x="356" y="158" font-family="${F}" font-size="17" letter-spacing="1" fill="${s.c}" font-weight="300">${s.ev[1]}</text>
+  <path d="M318 74 V204" stroke="${WHITE}" stroke-opacity=".35" stroke-dasharray="2 4"/>
+  <!-- итог -->
+  <path d="M648 74 H680 V143 H690" stroke="${WHITE}" stroke-opacity=".6" fill="none"/>
+  <g filter="url(#sh)"><rect x="690" y="112" width="268" height="62" fill="${WHITE}"/></g>
+  ${bracket(684, 106, 280, 74, 12, WHITE)}
+  <text x="706" y="133" font-family="${FC}" font-size="11" letter-spacing="3" fill="#5b646b">РЕШЕНИЕ ПО ЖАЛОБЕ</text>
+  <rect x="706" y="139" width="10" height="${wordSize * .72}" fill="${s.c}"/>
+  <text x="724" y="${139 + wordSize * .72}" font-family="${F}" font-weight="700" font-size="${wordSize}" letter-spacing="2" fill="${INK}">${s.word}</text>
+  <path d="M700 174 V${196 + 2 * 34 - 4}" stroke="${WHITE}" stroke-opacity=".6"/>
+  ${sub}
+  ${marker(976, 26, '#f2c230')}
+  <text x="40" y="300" font-family="${FC}" font-size="11" letter-spacing="3" fill="${DIM}">NL800 · АНАЛИЗ ЗАВЕРШЁН</text>
+  ${barcode(250, 300, 600, WHITE, s.prob + 7, .55)}
+  <text x="960" y="300" text-anchor="end" font-family="${FC}" font-size="11" letter-spacing="2" fill="${DIM}">01 / 05</text>
+</svg>`;
+}
+
+// шапка — светлый «сайт»: матовая панель, меню, крупный тонкий заголовок, штрихкод, счётчик
+function header() {
+  const H = 210;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>${shadow}
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f9fb"/><stop offset=".6" stop-color="#e9eef2"/><stop offset="1" stop-color="#dfe6eb"/></linearGradient>
+    <pattern id="tri" width="80" height="70" patternUnits="userSpaceOnUse"><path d="M0 70 L40 0 L80 70" fill="none" stroke="#c9d3da" stroke-width="1"/></pattern>
+    <linearGradient id="fade" x1="0" x2="1"><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient>
+    <mask id="m"><rect width="${W}" height="${H}" fill="url(#fade)"/></mask>
+  </defs>
+  <g filter="url(#sh)"><rect x="12" y="12" width="976" height="186" fill="url(#bg)"/></g>
+  <rect x="12" y="12" width="976" height="186" fill="url(#tri)" mask="url(#m)" opacity=".7"/>
+  <path d="M40 54 l9 -16 l9 16 z" fill="#2f8fe8"/>
+  <text x="68" y="44" font-family="${F}" font-weight="700" font-size="13" letter-spacing="3" fill="${INK}">NL HELPER</text>
+  <text x="68" y="57" font-family="${FC}" font-size="9" letter-spacing="3" fill="#7d878e">КУРАТОР ФОРУМА</text>
+  <g font-family="${FC}" font-size="12" letter-spacing="2" fill="#5b646b"><text x="380" y="50">Жалобы</text><text x="500" y="50">Правила</text><text x="620" y="50">Решения</text></g>
+  <path d="M380 58 H440" stroke="#2f8fe8" stroke-width="2"/>
+  <circle cx="948" cy="45" r="11" fill="none" stroke="#2f8fe8" stroke-width="3"/><circle cx="948" cy="45" r="11" fill="none" stroke="#bfe3ff" stroke-width="1"/>
+  <text x="40" y="128" font-family="${F}" font-weight="300" font-size="50" letter-spacing="6" fill="${INK}">ОТВЕТ НА ОБРАЩЕНИЕ</text>
+  <text x="42" y="154" font-family="${FC}" font-size="13" letter-spacing="2" fill="#5b646b">Официальное решение администрации по вашей теме</text>
+  <rect x="40" y="164" width="96" height="3" fill="#2f8fe8"/>
+  ${barcode(300, 186, 560, '#1d2a33', 11, .6)}
+  <text x="40" y="186" font-family="${FC}" font-size="10" letter-spacing="3" fill="#7d878e">NL800</text>
+  <text x="960" y="186" text-anchor="end" font-family="${FC}" font-size="11" letter-spacing="2" fill="#5b646b">01 / 05</text>
+</svg>`;
+}
+// концовка — «ЗАДАЧА ВЫПОЛНЕНА»
+function complete() {
+  const H = 130;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>${shadow}</defs>
+  <path d="M60 64 H300 M700 64 H940" stroke="${WHITE}" stroke-opacity=".45"/>
+  <g filter="url(#sh)"><rect x="300" y="34" width="400" height="60" fill="${WHITE}"/></g>
+  ${bracket(292, 26, 416, 76, 14, WHITE)}
+  <rect x="300" y="34" width="6" height="60" fill="#2f8fe8"/>
+  <text x="326" y="62" font-family="${F}" font-size="22" letter-spacing="2" fill="${INK}"><tspan font-weight="700">ЗАДАЧА</tspan> <tspan font-weight="300">ВЫПОЛНЕНА</tspan></text>
+  <text x="326" y="82" font-family="${FC}" font-size="11" letter-spacing="3" fill="#5b646b">ОТЧЁТ ОТПРАВЛЕН · NL800</text>
+  ${marker(668, 64, '#2f8fe8', '<path d="M-4 0 L-1 3 L4 -3" fill="none" stroke="#2f8fe8" stroke-width="2"/>')}
+  ${barcode(360, 122, 280, WHITE, 3, .45)}
+</svg>`;
+}
+function divider() {
+  const H = 44;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  ${barcode(200, 30, 600, WHITE, 5, .5)}
+  <path d="M500 8 l7 12 h-14 z" fill="#2f8fe8"/>
+</svg>`;
+}
+
+const jobs = [['dbh2-header', header()], ['dbh2-complete', complete()], ['dbh2-divider', divider()]];
+for (const [k, s] of Object.entries(ST)) jobs.push([`dbh2-${k}`, statusBanner(s)]);
+const log = document.getElementById('log');
+(async () => {
+  for (const [name, svg] of jobs) {
+    const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode();
+    const k = 1.5, cv = document.createElement('canvas'); cv.width = img.width * k; cv.height = img.height * k;
+    const x = cv.getContext('2d'); x.scale(k, k); x.drawImage(img, 0, 0);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    const res = await fetch('/save?name=' + name + '.png', { method: 'POST', body: blob });
+    log.insertAdjacentHTML('beforeend', `<div>${name}.png — ${res.ok ? 'OK' : 'ошибка'} (${Math.round(blob.size / 1024)} КБ)</div>`);
+    const im = document.createElement('img'); im.src = URL.createObjectURL(blob); log.appendChild(im);
+  }
+  document.title = 'DONE';
+})();
+</script></body></html>
